@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  ACCOUNT_MANAGER
+  CUSTOMER
+}
+
+enum CampaignStatus {
+  DRAFT
+  LIVE
+  PAUSED
+  COMPLETED
+}
+
+enum ChannelType {
+  MAIL_TRACKING
+  CALL_TRACKING
+  GOOGLE_ADS
+  FACEBOOK_ADS
+  BEHAVIORAL_ADS
+  GMAIL_ADS
+  YOUTUBE_ADS
+  QR_CODES
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  passwordHash   String
+  role           Role     @default(CUSTOMER)
+  avatarUrl      String?
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
+  managedCompanies CompanyManager[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([email])
+  @@index([companyId])
+}
+
+model Company {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  logoUrl     String?
+  website     String?
+  address     String?
+  phone       String?
+  industry    String?
+  isActive    Boolean    @default(true)
+  users       User[]
+  campaigns   Campaign[]
+  managers    CompanyManager[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([slug])
+}
+
+model CompanyManager {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
+}
+
+model Campaign {
+  id              String         @id @default(cuid())
+  name            String
+  campaignCode    String         @unique
+  status          CampaignStatus @default(DRAFT)
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  description     String?
+  destinationUrl  String?
+  setupDate       DateTime       @default(now())
+  startDate       DateTime?
+  endDate         DateTime?
+  previewImageUrl String?
+  channels        CampaignChannel[]
+  metrics         CampaignMetricDaily[]
+  mailBatches     MailBatch[]
+  qrMetrics       QRCodeMetric[]
+  callLogs        CallLogSummary[]
+  assets          Asset[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([campaignCode])
+  @@index([status])
+}
+
+model CampaignChannel {
+  id         String      @id @default(cuid())
+  campaignId String
+  campaign   Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  channel    ChannelType
+  isActive   Boolean     @default(true)
+  budget     Float?
+  notes      String?
+  createdAt  DateTime    @default(now())
+
+  @@unique([campaignId, channel])
+}
+
+model CampaignMetricDaily {
+  id              String      @id @default(cuid())
+  campaignId      String
+  campaign        Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  channel         ChannelType
+  date            DateTime    @db.Date
+  impressions     Int         @default(0)
+  clicks          Int         @default(0)
+  leads           Int         @default(0)
+  calls           Int         @default(0)
+  qualifiedCalls  Int         @default(0)
+  conversions     Int         @default(0)
+  spend           Float       @default(0)
+  piecesDelivered Int         @default(0)
+  qrScans         Int         @default(0)
+
+  @@unique([campaignId, channel, date])
+  @@index([campaignId])
+  @@index([date])
+  @@index([channel])
+}
+
+model MailBatch {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  batchName       String
+  quantity        Int
+  dropDate        DateTime @db.Date
+  deliveredCount  Int      @default(0)
+  returnedCount   Int      @default(0)
+  inTransitCount  Int      @default(0)
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model QRCodeMetric {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  codeLabel  String
+  scans      Int      @default(0)
+  uniqueScans Int     @default(0)
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model CallLogSummary {
+  id             String   @id @default(cuid())
+  campaignId     String
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date           DateTime @db.Date
+  totalCalls     Int      @default(0)
+  qualifiedCalls Int      @default(0)
+  avgDuration    Int      @default(0)
+  missedCalls    Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model Asset {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  type       String
+  url        String
+  thumbnail  String?
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model InviteToken {
+  id         String    @id @default(cuid())
+  email      String
+  token      String    @unique
+  role       Role      @default(CUSTOMER)
+  companyId  String?
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+}
+
+model ReportExport {
+  id         String   @id @default(cuid())
+  userId     String
+  companyId  String
+  campaignId String?
+  format     String   @default("csv")
+  status     String   @default("pending")
+  fileUrl    String?
+  filters    String?
+  createdAt  DateTime @default(now())
+}
