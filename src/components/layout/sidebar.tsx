@@ -26,11 +26,13 @@ import {
   Building2,
   Upload,
   Activity,
+  Zap,
 } from "lucide-react";
 
 const mainNav = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Dashboard", href: "/dashboard/overview", icon: LayoutDashboard },
+  { label: "Attribution", href: "/dashboard/attribution", icon: Zap },
   { label: "Designs", href: "/dashboard/designs", icon: Palette },
 ];
 
