@@ -240,3 +240,122 @@ export function getTimeSeriesData(campaignIds?: string[]) {
 
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// ---- Mail-tracking demo (for MAIL_TRACKING page before IV-MTR is live) ----
+
+const DEMO_STATUSES = [
+  "DELIVERED",
+  "DELIVERED",
+  "DELIVERED",
+  "DELIVERED",
+  "OUT_FOR_DELIVERY",
+  "IN_TRANSIT",
+  "IN_TRANSIT",
+  "ACCEPTED",
+  "UNDELIVERABLE",
+  "DELIVERED_INFERRED",
+] as const;
+
+const DEMO_CITIES = [
+  ["Port Orange", "FL", "32127"],
+  ["Daytona Beach", "FL", "32114"],
+  ["Ormond Beach", "FL", "32174"],
+  ["Palm Coast", "FL", "32137"],
+  ["New Smyrna Beach", "FL", "32168"],
+  ["DeLand", "FL", "32720"],
+];
+
+export function getDemoMailTracking(campaignId: string) {
+  const total = 12500;
+  const delivered = 10420;
+  const inTransit = 1450;
+  const ofd = 380;
+  const undeliverable = 190;
+  const inferred = 60;
+
+  // Delivery curve — daily deliveries over last 14 days, peaks mid-window
+  const today = new Date();
+  const deliveryCurve = Array.from({ length: 14 }).map((_, i) => {
+    const day = new Date(today);
+    day.setDate(today.getDate() - (13 - i));
+    const bell = Math.exp(-Math.pow((i - 7) / 3, 2));
+    return {
+      date: day.toISOString().slice(0, 10),
+      delivered: Math.round(delivered * bell * 0.18),
+    };
+  });
+
+  const pieces = Array.from({ length: 60 }).map((_, i) => {
+    const status = DEMO_STATUSES[i % DEMO_STATUSES.length];
+    const [city, state, zip] = DEMO_CITIES[i % DEMO_CITIES.length];
+    const firstScan = new Date(today);
+    firstScan.setDate(today.getDate() - (14 - (i % 14)));
+    const delivDate =
+      status === "DELIVERED" || status === "DELIVERED_INFERRED"
+        ? new Date(firstScan.getTime() + (2 + (i % 3)) * 86400000)
+        : null;
+    return {
+      id: `demo-piece-${i}`,
+      imb: `0012345${String(600000000 + i).padStart(9, "0")}${zip}0000`,
+      recipientName: `Demo Recipient ${i + 1}`,
+      city,
+      state,
+      zip5: zip,
+      status,
+      expectedInHomeDate: firstScan.toISOString(),
+      firstScanAt: firstScan.toISOString(),
+      deliveredAt: delivDate ? delivDate.toISOString() : null,
+      daysToDeliver: delivDate ? 2 + (i % 3) : null,
+      isSeed: i < 3,
+    };
+  });
+
+  return {
+    campaignId,
+    totalQuantity: total,
+    pieceCount: total,
+    statusCounts: {
+      DELIVERED: delivered,
+      IN_TRANSIT: inTransit,
+      OUT_FOR_DELIVERY: ofd,
+      UNDELIVERABLE: undeliverable,
+      DELIVERED_INFERRED: inferred,
+    },
+    deliveryRate: delivered / total,
+    avgDaysToDeliver: 2.8,
+    deliveryCurve,
+    operationBreakdown: [
+      { operation: "ORIGIN_ACCEPTANCE", count: total },
+      { operation: "ORIGIN_PROCESSED", count: total },
+      { operation: "IN_TRANSIT", count: 11800 },
+      { operation: "DESTINATION_PROCESSED", count: 11200 },
+      { operation: "OUT_FOR_DELIVERY", count: 10800 },
+      { operation: "DELIVERED", count: delivered },
+    ],
+    pieces,
+    batches: [
+      {
+        id: "demo-batch-1",
+        campaignId,
+        batchName: "Drop 1 — Volusia County",
+        quantity: 7500,
+        dropDate: new Date(today.getTime() - 14 * 86400000).toISOString(),
+        expectedInHomeStart: new Date(today.getTime() - 11 * 86400000).toISOString(),
+        expectedInHomeEnd: new Date(today.getTime() - 8 * 86400000).toISOString(),
+        deliveredCount: 6800,
+        status: "delivered",
+      },
+      {
+        id: "demo-batch-2",
+        campaignId,
+        batchName: "Drop 2 — Flagler County",
+        quantity: 5000,
+        dropDate: new Date(today.getTime() - 8 * 86400000).toISOString(),
+        expectedInHomeStart: new Date(today.getTime() - 5 * 86400000).toISOString(),
+        expectedInHomeEnd: new Date(today.getTime() - 2 * 86400000).toISOString(),
+        deliveredCount: 3620,
+        status: "in_progress",
+      },
+    ],
+  };
+}

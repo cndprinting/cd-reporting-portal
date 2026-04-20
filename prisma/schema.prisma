@@ -31,6 +31,37 @@ enum ChannelType {
   QR_CODES
 }
 
+// -------- USPS IV-MTR / IMb tracking --------
+
+enum MailPieceStatus {
+  PENDING             // In mail file, not yet accepted by USPS
+  ACCEPTED            // First scan received
+  IN_TRANSIT          // Moving through network
+  OUT_FOR_DELIVERY    // Loaded on carrier route
+  DELIVERED           // Final delivery scan
+  DELIVERED_INFERRED  // OFD + no bounce after 2 days, no final scan
+  UNDELIVERABLE       // UAA / return to sender
+}
+
+enum ScanOperation {
+  ORIGIN_ACCEPTANCE       // USPS accepted at origin facility
+  ORIGIN_PROCESSED        // Sortation at origin
+  IN_TRANSIT              // Between facilities
+  DESTINATION_PROCESSED   // Sortation at destination SCF
+  DESTINATION_DELIVERY    // At delivery unit
+  OUT_FOR_DELIVERY        // Loaded for carrier
+  DELIVERED               // Final delivery scan
+  UNDELIVERABLE           // UAA
+  OTHER
+}
+
+enum IngestionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -147,13 +178,122 @@ model MailBatch {
   batchName       String
   quantity        Int
   dropDate        DateTime @db.Date
+  expectedInHomeStart DateTime? @db.Date
+  expectedInHomeEnd   DateTime? @db.Date
+  mailClass       String?  // First-Class, Marketing Mail, etc.
+  mailShape       String?  // letter, flat, parcel
+  mailerId        String?  // MID used for this drop
   deliveredCount  Int      @default(0)
   returnedCount   Int      @default(0)
   inTransitCount  Int      @default(0)
   status          String   @default("pending")
+  mailPieces      MailPiece[]
   createdAt       DateTime @default(now())
 
   @@index([campaignId])
+  @@index([dropDate])
+}
+
+model MailPiece {
+  id                  String          @id @default(cuid())
+  campaignId          String
+  campaign            Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  mailBatchId         String?
+  mailBatch           MailBatch?      @relation(fields: [mailBatchId], references: [id], onDelete: SetNull)
+
+  // USPS Intelligent Mail barcode (31 digits, DMM 708)
+  imb                 String          @unique
+  // Optional separate components for analytics
+  imbBarcodeId        String?         // 2-digit barcode ID
+  imbServiceType      String?         // 3-digit service type (STID)
+  imbMailerId         String?         // 6 or 9-digit MID
+  imbSerial           String?         // 6 or 9-digit serial number
+  imbRoutingZip       String?         // 5/9/11-digit routing code
+
+  // Recipient + address
+  recipientName       String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  state               String?
+  zip5                String?
+  zip4                String?
+
+  // Delivery prediction + status
+  status              MailPieceStatus @default(PENDING)
+  expectedInHomeDate  DateTime?       @db.Date
+  firstScanAt         DateTime?
+  lastScanAt          DateTime?
+  deliveredAt         DateTime?
+  daysToDeliver       Int?
+
+  // Seed list flag (for QA / known-good addresses)
+  isSeed              Boolean         @default(false)
+
+  scanEvents          ScanEvent[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([campaignId])
+  @@index([mailBatchId])
+  @@index([imb])
+  @@index([status])
+  @@index([zip5])
+  @@index([expectedInHomeDate])
+}
+
+model ScanEvent {
+  id              String         @id @default(cuid())
+  mailPieceId     String
+  mailPiece       MailPiece      @relation(fields: [mailPieceId], references: [id], onDelete: Cascade)
+
+  // Raw IMb from the feed (also stored on MailPiece for easy querying)
+  imb             String
+  scanDatetime    DateTime
+  operation       ScanOperation  @default(OTHER)
+  operationCode   String?        // USPS operation code (e.g., "92")
+  operationDesc   String?        // Human description
+
+  facilityZip     String?
+  facilityCity    String?
+  facilityState   String?
+  facilityType    String?        // NDC, SCF, DDU, etc.
+
+  machineId       String?
+  runId           String?
+
+  predictedDeliveryDate DateTime? @db.Date
+  rawPayload      Json?
+
+  // Dedup — USPS can deliver duplicates
+  ingestionId     String?
+  ingestion       IVFeedIngestion? @relation(fields: [ingestionId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime       @default(now())
+
+  @@unique([imb, scanDatetime, operationCode, facilityZip])
+  @@index([mailPieceId])
+  @@index([imb])
+  @@index([scanDatetime])
+  @@index([operation])
+}
+
+model IVFeedIngestion {
+  id              String           @id @default(cuid())
+  source          String           // "iv-mtr-push", "iv-mtr-pull", "manual"
+  fileName        String?
+  fileSize        Int?
+  recordsReceived Int              @default(0)
+  recordsInserted Int              @default(0)
+  recordsSkipped  Int              @default(0)
+  status          IngestionStatus  @default(PENDING)
+  errorMessage    String?
+  startedAt       DateTime         @default(now())
+  completedAt     DateTime?
+  scanEvents      ScanEvent[]
+
+  @@index([status])
+  @@index([startedAt])
 }
 
 model QRCodeMetric {

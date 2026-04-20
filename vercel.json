@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/iv-mtr/pull",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}
