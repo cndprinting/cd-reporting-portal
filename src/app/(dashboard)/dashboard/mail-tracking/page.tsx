@@ -26,6 +26,7 @@ import { KPICard } from "@/components/dashboard/kpi-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PieceDetailModal } from "@/components/mail-tracking/piece-detail-modal";
 
 interface MailPieceRow {
   id: string;
@@ -79,6 +80,7 @@ export default function MailTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [campaignId] = useState("camp-1"); // TODO: pull from selector
+  const [openPieceId, setOpenPieceId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -334,7 +336,11 @@ export default function MailTrackingPage() {
               </thead>
               <tbody>
                 {filtered.slice(0, 100).map((p) => (
-                  <tr key={p.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <tr
+                    key={p.id}
+                    onClick={() => setOpenPieceId(p.id)}
+                    className="border-b last:border-0 hover:bg-brand-50 cursor-pointer"
+                  >
                     <td className="py-2 font-mono text-xs text-gray-700">
                       {p.isSeed && (
                         <Badge className="mr-2 bg-indigo-100 text-indigo-700 text-[10px]">
@@ -384,6 +390,8 @@ export default function MailTrackingPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PieceDetailModal pieceId={openPieceId} onClose={() => setOpenPieceId(null)} />
     </div>
   );
 }
