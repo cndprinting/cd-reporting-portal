@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useBrand } from "./brand-provider";
 import {
   LayoutDashboard,
   Home,
@@ -27,6 +28,7 @@ import {
   Upload,
   Activity,
   Zap,
+  Palette as PaletteIcon,
 } from "lucide-react";
 
 const mainNav = [
@@ -56,6 +58,7 @@ const bottomNav = [
   { label: "Mail Import", href: "/dashboard/admin/mail-import", icon: Upload },
   { label: "Feed Monitor", href: "/dashboard/admin/ingestion", icon: Activity },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports", icon: Mail },
+  { label: "Branding", href: "/dashboard/admin/branding", icon: PaletteIcon },
   { label: "Admin", href: "/dashboard/admin", icon: Shield },
 ];
 
@@ -67,8 +70,18 @@ const sampleCampaigns = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const brand = useBrand();
   const [campaignsOpen, setCampaignsOpen] = React.useState(true);
   const [collapsed, setCollapsed] = React.useState(false);
+
+  const initials = brand.companyName
+    .replace(/\./g, " ")
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   return (
     <aside
@@ -77,15 +90,26 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo */}
+      {/* Logo — switches to customer brand when branded */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-200 shrink-0">
-        <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-brand-600 text-white font-bold text-sm shrink-0">
-          C&D
-        </div>
+        {brand.logoUrl ? (
+          <img
+            src={brand.logoUrl}
+            alt={brand.companyName}
+            className="h-9 w-9 rounded-lg object-contain bg-white shrink-0"
+          />
+        ) : (
+          <div
+            className="flex items-center justify-center h-9 w-9 rounded-lg text-white font-bold text-sm shrink-0"
+            style={{ backgroundColor: brand.isCustomerBranded ? brand.primary : "var(--brand-primary, #0284c7)" }}
+          >
+            {brand.isCustomerBranded ? initials : "C&D"}
+          </div>
+        )}
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">cndprinting.com</p>
-            <p className="text-xs text-gray-500 truncate">Reporting Portal</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">{brand.companyName}</p>
+            <p className="text-xs text-gray-500 truncate">{brand.tagline}</p>
           </div>
         )}
       </div>

@@ -93,6 +93,10 @@ model Company {
   weeklyReportEnabled   Boolean  @default(true)
   weeklyReportRecipients String? // comma-separated emails; null = all company users
   lastWeeklyReportAt    DateTime?
+  // White-label branding (applied when a user from this company logs in)
+  brandPrimary  String?  // hex e.g. "#0ea5e9"
+  brandAccent   String?  // hex e.g. "#f59e0b"
+  brandTagline  String?
   users       User[]
   campaigns   Campaign[]
   managers    CompanyManager[]

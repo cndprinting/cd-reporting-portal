@@ -56,6 +56,10 @@ export async function GET(req: NextRequest) {
       weeklyReportEnabled: true,
       weeklyReportRecipients: true,
       lastWeeklyReportAt: true,
+      logoUrl: true,
+      brandPrimary: true,
+      brandAccent: true,
+      brandTagline: true,
       users: { select: { email: true, name: true } },
     },
   });
