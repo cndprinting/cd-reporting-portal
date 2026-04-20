@@ -27,6 +27,7 @@
 
 import prisma from "@/lib/prisma";
 import { mapOperationCode, parseIMb } from "./imb";
+import { USPS_MID } from "../usps-config";
 
 export interface IVScanRecord {
   imb: string;
@@ -251,6 +252,20 @@ export async function importMailFile(params: {
     select: { companyId: true },
   });
   if (!campaign) throw new Error(`Campaign ${params.campaignId} not found`);
+
+  // If a batch was supplied but has no mailerId, stamp C&D's default MID onto it
+  if (params.mailBatchId) {
+    const batch = await prisma.mailBatch.findUnique({
+      where: { id: params.mailBatchId },
+      select: { mailerId: true },
+    });
+    if (batch && !batch.mailerId) {
+      await prisma.mailBatch.update({
+        where: { id: params.mailBatchId },
+        data: { mailerId: USPS_MID },
+      });
+    }
+  }
 
   let inserted = 0;
   let skipped = 0;

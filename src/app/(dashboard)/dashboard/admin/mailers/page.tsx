@@ -73,15 +73,25 @@ export default function MailersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
-          <Building2 className="h-5 w-5" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
+            <Building2 className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Mailer Customers</h1>
+            <p className="text-sm text-gray-500">
+              Per-customer USPS tracking rollups &middot; API keys for customer pull integrations
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mailer Customers</h1>
-          <p className="text-sm text-gray-500">
-            Per-customer USPS tracking rollups &middot; API keys for customer pull integrations
-          </p>
+        <div className="text-right text-xs text-gray-600 bg-gray-50 rounded-lg border border-gray-200 px-3 py-2">
+          <div>
+            C&amp;D CRID <span className="font-mono text-gray-900">2504758</span>
+          </div>
+          <div>
+            MID <span className="font-mono text-gray-900">901052658</span>
+          </div>
         </div>
       </div>
 

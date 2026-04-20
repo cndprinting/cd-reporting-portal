@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ingestIVFile, type IVScanRecord } from "@/lib/services/iv-mtr-ingest";
+import { USPS_MID } from "@/lib/usps-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const base = process.env.IV_MTR_API_BASE ?? "https://iv.usps.com/ivws/api";
   const userId = process.env.IV_MTR_USER_ID;
   const password = process.env.IV_MTR_PASSWORD;
-  const mid = process.env.IV_MTR_MID;
+  const mid = USPS_MID;
   if (!userId || !password || !mid) {
     return NextResponse.json({ error: "IV-MTR credentials not configured" }, { status: 500 });
   }

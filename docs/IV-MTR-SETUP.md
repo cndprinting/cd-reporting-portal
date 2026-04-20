@@ -1,5 +1,21 @@
 # USPS IV-MTR Application & Setup Guide
 
+## C&D Printing credentials (on file)
+
+| Field | Value |
+|---|---|
+| **Business** | C&D Printing |
+| **CRID** | `2504758` |
+| **Mailer ID (MID)** | `901052658` (9-digit) |
+| **BCG Account** | held by C&D team — confirm with Benjy before making changes |
+
+These are also hard-coded as defaults in `src/lib/usps-config.ts`. Override
+per environment by setting `USPS_CRID` / `IV_MTR_MID` env vars.
+
+---
+
+# Original setup guide follows
+
 This is the step-by-step to get the C&D Reporting Portal receiving real-time USPS
 Intelligent Mail barcode (IMb) scan data — the foundation for Accutrace-style tracking.
 
