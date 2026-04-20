@@ -24,6 +24,8 @@ import {
   Palette,
   Shield,
   Building2,
+  Upload,
+  Activity,
 } from "lucide-react";
 
 const mainNav = [
@@ -34,6 +36,7 @@ const mainNav = [
 
 const channelNav = [
   { label: "Mail Tracking", href: "/dashboard/mail-tracking", icon: Mail },
+  { label: "My Tracking", href: "/dashboard/my-tracking", icon: Mail },
   { label: "Call Tracking", href: "/dashboard/call-tracking", icon: Phone },
   { label: "Google Ads", href: "/dashboard/google-ads", icon: Globe },
   { label: "Facebook Ads", href: "/dashboard/facebook-ads", icon: Share2 },
@@ -48,6 +51,8 @@ const bottomNav = [
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
   { label: "Mailers", href: "/dashboard/admin/mailers", icon: Building2 },
+  { label: "Mail Import", href: "/dashboard/admin/mail-import", icon: Upload },
+  { label: "Feed Monitor", href: "/dashboard/admin/ingestion", icon: Activity },
   { label: "Admin", href: "/dashboard/admin", icon: Shield },
 ];
 
