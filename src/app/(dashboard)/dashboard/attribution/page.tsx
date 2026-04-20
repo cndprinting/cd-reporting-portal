@@ -267,8 +267,8 @@ export default function AttributionPage() {
                   innerRadius={50}
                   outerRadius={90}
                   paddingAngle={2}
-                  label={(e) =>
-                    `${e.channel} ${((Number(e.share) || 0) * 100).toFixed(0)}%`
+                  label={(e: { name?: string; percent?: number }) =>
+                    `${e.name ?? ""} ${((e.percent ?? 0) * 100).toFixed(0)}%`
                   }
                   labelLine={false}
                 >
