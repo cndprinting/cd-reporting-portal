@@ -288,17 +288,26 @@ export default function MailTrackingPage() {
       {/* Undeliverable alert */}
       {undeliv > 0 && (
         <Card className="border-rose-200 bg-rose-50">
-          <CardContent className="py-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-rose-600" />
-            <div className="text-sm">
-              <div className="font-semibold text-rose-900">
-                {undeliv.toLocaleString()} undeliverable pieces
-              </div>
-              <div className="text-rose-700">
-                USPS reported UAA scans (bad address, vacant, refused). Export the list to
-                update your address hygiene.
+          <CardContent className="py-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+              <div className="text-sm">
+                <div className="font-semibold text-rose-900">
+                  {undeliv.toLocaleString()} undeliverable pieces
+                </div>
+                <div className="text-rose-700">
+                  USPS reported UAA scans (bad address, vacant, refused). Export the list to
+                  update your address hygiene.
+                </div>
               </div>
             </div>
+            <a
+              href={`/api/mail-pieces/undeliverable?campaignId=${campaignId}`}
+              download
+              className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-rose-700 hover:text-rose-900 bg-white border border-rose-200 rounded px-3 py-1.5"
+            >
+              Download CSV
+            </a>
           </CardContent>
         </Card>
       )}
