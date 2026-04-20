@@ -241,6 +241,48 @@ export function getTimeSeriesData(campaignIds?: string[]) {
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// ---- Mailers list demo ----
+
+export function getDemoMailersList() {
+  return {
+    mailers: [
+      {
+        id: "demo-company-1",
+        name: "C&D Printing Demo Account",
+        slug: "cd-printing-demo",
+        industry: "Printing & Direct Mail",
+        campaignCount: 4,
+        pieceCount: 42500,
+        deliveredCount: 38230,
+        deliveryRate: 0.899,
+        mailerIds: ["903847261"],
+      },
+      {
+        id: "demo-company-2",
+        name: "Sunshine Realty Group",
+        slug: "sunshine-realty",
+        industry: "Real Estate",
+        campaignCount: 2,
+        pieceCount: 18750,
+        deliveredCount: 16890,
+        deliveryRate: 0.901,
+        mailerIds: ["903847261", "903847890"],
+      },
+      {
+        id: "demo-company-3",
+        name: "Palm Coast Insurance",
+        slug: "palm-coast-insurance",
+        industry: "Insurance",
+        campaignCount: 1,
+        pieceCount: 6200,
+        deliveredCount: 5580,
+        deliveryRate: 0.9,
+        mailerIds: ["903847261"],
+      },
+    ],
+  };
+}
+
 // ---- Mail-tracking demo (for MAIL_TRACKING page before IV-MTR is live) ----
 
 const DEMO_STATUSES = [

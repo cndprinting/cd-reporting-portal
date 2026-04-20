@@ -245,6 +245,13 @@ export async function importMailFile(params: {
 }): Promise<{ inserted: number; skipped: number }> {
   if (!prisma) throw new Error("Database not initialized");
 
+  // Look up the campaign's company once so we can denormalize companyId onto each MailPiece
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: params.campaignId },
+    select: { companyId: true },
+  });
+  if (!campaign) throw new Error(`Campaign ${params.campaignId} not found`);
+
   let inserted = 0;
   let skipped = 0;
 
@@ -258,6 +265,7 @@ export async function importMailFile(params: {
       await prisma.mailPiece.create({
         data: {
           campaignId: params.campaignId,
+          companyId: campaign.companyId,
           mailBatchId: params.mailBatchId,
           imb: row.imb.replace(/\D/g, ""),
           imbBarcodeId: parsed.barcodeId,

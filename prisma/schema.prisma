@@ -92,6 +92,8 @@ model Company {
   users       User[]
   campaigns   Campaign[]
   managers    CompanyManager[]
+  mailPieces  MailPiece[]
+  apiKeys     ApiKey[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -198,6 +200,9 @@ model MailPiece {
   id                  String          @id @default(cuid())
   campaignId          String
   campaign            Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Denormalized for fast per-customer queries (set at import time from campaign.companyId)
+  companyId           String
+  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   mailBatchId         String?
   mailBatch           MailBatch?      @relation(fields: [mailBatchId], references: [id], onDelete: SetNull)
 
@@ -235,6 +240,8 @@ model MailPiece {
   updatedAt           DateTime        @updatedAt
 
   @@index([campaignId])
+  @@index([companyId])
+  @@index([companyId, status])
   @@index([mailBatchId])
   @@index([imb])
   @@index([status])
@@ -349,6 +356,24 @@ model InviteToken {
 
   @@index([token])
   @@index([email])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String    // e.g. "Sunshine Realty production key"
+  keyHash     String    @unique // sha256 of the raw key; raw key shown once at creation
+  keyPrefix   String    // first 8 chars for display/lookup (e.g. "cdk_live_ab12cd34")
+  scopes      String    @default("read:tracking") // space-separated scope list
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([keyPrefix])
 }
 
 model ReportExport {

@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Palette,
   Shield,
+  Building2,
 } from "lucide-react";
 
 const mainNav = [
@@ -46,6 +47,7 @@ const bottomNav = [
   { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Mailers", href: "/dashboard/admin/mailers", icon: Building2 },
   { label: "Admin", href: "/dashboard/admin", icon: Shield },
 ];
 
