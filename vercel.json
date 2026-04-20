@@ -3,6 +3,10 @@
     {
       "path": "/api/iv-mtr/pull",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/reports/weekly-cron",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

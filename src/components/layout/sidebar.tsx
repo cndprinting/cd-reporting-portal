@@ -55,6 +55,7 @@ const bottomNav = [
   { label: "Mailers", href: "/dashboard/admin/mailers", icon: Building2 },
   { label: "Mail Import", href: "/dashboard/admin/mail-import", icon: Upload },
   { label: "Feed Monitor", href: "/dashboard/admin/ingestion", icon: Activity },
+  { label: "Scheduled Reports", href: "/dashboard/admin/reports", icon: Mail },
   { label: "Admin", href: "/dashboard/admin", icon: Shield },
 ];
 

@@ -89,6 +89,10 @@ model Company {
   phone       String?
   industry    String?
   isActive    Boolean    @default(true)
+  // Scheduled reports
+  weeklyReportEnabled   Boolean  @default(true)
+  weeklyReportRecipients String? // comma-separated emails; null = all company users
+  lastWeeklyReportAt    DateTime?
   users       User[]
   campaigns   Campaign[]
   managers    CompanyManager[]
