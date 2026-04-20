@@ -130,6 +130,7 @@ model Campaign {
   qrMetrics       QRCodeMetric[]
   callLogs        CallLogSummary[]
   assets          Asset[]
+  mailPieces      MailPiece[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
