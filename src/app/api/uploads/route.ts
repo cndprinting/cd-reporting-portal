@@ -18,7 +18,9 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
+  // Any logged-in user can upload — customers need this for self-service order flow
+  // (they upload their own recipient list). Admins upload proofs + lists for customers.
+  if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

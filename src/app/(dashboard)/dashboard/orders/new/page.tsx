@@ -19,7 +19,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileSpreadsheet,
-  Upload,
   Check,
   AlertCircle,
   CheckCircle2,
@@ -27,6 +26,7 @@ import {
   ArrowRight,
   Calendar,
   DollarSign,
+  Download,
 } from "lucide-react";
 import {
   parseSheet,
@@ -208,27 +208,51 @@ export default function NewOrderPage() {
         </CardHeader>
         <CardContent>
           {!sheet ? (
-            <label
-              className={`block border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
-                uploading
-                  ? "opacity-60 pointer-events-none"
-                  : "border-gray-300 hover:border-brand-400 hover:bg-brand-50"
-              }`}
-            >
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls,.txt,text/csv"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-              />
-              <FileSpreadsheet className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-              <div className="text-base font-semibold text-gray-900">
-                Drop your spreadsheet here
+            <div className="space-y-4">
+              {/* Download template — the best UX: customer fills in exact columns we expect */}
+              <div className="rounded-lg bg-brand-50 border border-brand-200 p-4 flex items-start gap-3">
+                <Download className="h-5 w-5 text-brand-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-brand-900">
+                    New to this? Download our recipient list template first.
+                  </div>
+                  <div className="text-xs text-brand-700 mt-0.5">
+                    It has the exact columns we need. Fill it in with your recipients, save as CSV,
+                    and drop it below.
+                  </div>
+                </div>
+                <a
+                  href="/api/templates/recipient-list.csv"
+                  download
+                  className="shrink-0 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-3 py-2 rounded-md inline-flex items-center gap-1"
+                >
+                  <Download className="h-3 w-3" />
+                  Download template
+                </a>
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                CSV, XLSX, or TXT · we&rsquo;ll auto-detect the columns
-              </div>
-            </label>
+
+              <label
+                className={`block border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
+                  uploading
+                    ? "opacity-60 pointer-events-none"
+                    : "border-gray-300 hover:border-brand-400 hover:bg-brand-50"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls,.txt,text/csv"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                />
+                <FileSpreadsheet className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                <div className="text-base font-semibold text-gray-900">
+                  Drop your filled-in spreadsheet here
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  CSV, XLSX, or TXT · if you used our template, columns auto-match
+                </div>
+              </label>
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-3">
@@ -271,12 +295,17 @@ export default function NewOrderPage() {
                     }
                   >
                     {quality >= 0.8
-                      ? "Looks great"
+                      ? "All columns recognized ✓"
                       : quality >= 0.6
-                        ? "OK — review below"
+                        ? "Review below"
                         : "Missing required fields"}
                   </Badge>
                 </div>
+                {quality >= 0.8 && (
+                  <div className="text-xs text-emerald-700 mb-3">
+                    Our template columns matched automatically. Scroll down to pick a design.
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                   {(
                     [
