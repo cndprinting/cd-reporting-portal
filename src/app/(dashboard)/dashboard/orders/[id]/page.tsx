@@ -18,6 +18,7 @@ import {
   Truck,
   Clock,
   ArrowLeft,
+  RotateCw,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -147,13 +148,36 @@ export default function OrderDetailPage() {
             {order.description ?? "Mailing"} · {order.company.name}
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold text-gray-900">
-            {order.totalPrice ? `$${order.totalPrice.toFixed(2)}` : "—"}
+        <div className="text-right flex flex-col items-end gap-2">
+          <div>
+            <div className="text-3xl font-bold text-gray-900">
+              {order.totalPrice ? `$${order.totalPrice.toFixed(2)}` : "—"}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {order.quantity.toLocaleString()} pieces
+            </div>
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            {order.quantity.toLocaleString()} pieces
-          </div>
+          {/* Repeat this order — only shown for completed/dropped orders */}
+          {["DROPPED", "DELIVERING", "COMPLETE"].includes(order.status) && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy === "Repeat"}
+              onClick={() =>
+                run("Repeat", async () => {
+                  const r = await fetch(`/api/orders/${id}/repeat`, { method: "POST" });
+                  if (r.ok) {
+                    const newOrder = await r.json();
+                    setTimeout(() => router.push(`/dashboard/orders/${newOrder.id}`), 600);
+                  }
+                  return r;
+                })
+              }
+            >
+              <RotateCw className="h-3 w-3 mr-1" />
+              {busy === "Repeat" ? "Cloning…" : "Repeat this order"}
+            </Button>
+          )}
         </div>
       </div>
 

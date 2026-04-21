@@ -57,12 +57,51 @@ export async function POST(
     null;
   const userAgent = req.headers.get("user-agent") ?? null;
 
-  // --- Attempt Stripe charge ---
+  // --- If order is drawn from a MailPackage, decrement that instead of charging Stripe ---
   let stripeChargeId: string | null = null;
   let stripePaymentIntentId: string | null = null;
+  let drewFromPackage = false;
+
+  if (order.packageId) {
+    const pkg = await prisma.mailPackage.findUnique({ where: { id: order.packageId } });
+    if (!pkg) {
+      return NextResponse.json({ error: "linked package not found" }, { status: 409 });
+    }
+    const remaining = pkg.totalPieces - pkg.usedPieces;
+    if (remaining < order.quantity) {
+      return NextResponse.json(
+        {
+          error: `package has only ${remaining.toLocaleString()} pieces left, order needs ${order.quantity.toLocaleString()}`,
+        },
+        { status: 409 },
+      );
+    }
+    // Write drawdown + increment usedPieces atomically
+    await prisma.$transaction([
+      prisma.packageDrawdown.create({
+        data: {
+          packageId: pkg.id,
+          orderId: order.id,
+          pieces: order.quantity,
+          note: `Order ${order.orderCode} approved`,
+        },
+      }),
+      prisma.mailPackage.update({
+        where: { id: pkg.id },
+        data: {
+          usedPieces: { increment: order.quantity },
+          status:
+            pkg.usedPieces + order.quantity >= pkg.totalPieces ? "EXHAUSTED" : pkg.status,
+        },
+      }),
+    ]);
+    drewFromPackage = true;
+  }
+
+  // --- Otherwise attempt Stripe charge on card on file ---
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
 
-  if (stripeSecret && order.totalPrice && order.company.stripeCustomerId) {
+  if (!drewFromPackage && stripeSecret && order.totalPrice && order.company.stripeCustomerId) {
     try {
       const params = new URLSearchParams({
         customer: order.company.stripeCustomerId,
@@ -128,5 +167,6 @@ export async function POST(
     ok: true,
     approval,
     paymentCaptured: !!stripeChargeId,
+    drewFromPackage,
   });
 }
