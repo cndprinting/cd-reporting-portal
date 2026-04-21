@@ -1,173 +1,232 @@
 "use client";
 
-import React from "react";
-import { KPICard } from "@/components/dashboard/kpi-card";
-import { TimeSeriesChart, ChannelBarChart, ChannelPieChart } from "@/components/dashboard/channel-chart";
-import { getChannelKPIs, getTimeSeriesData, getAggregatedKPIs } from "@/lib/demo-data";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+/**
+ * Dashboard Overview — real numbers only, no fake demo KPIs.
+ * Pulls live counts from our APIs; links out to specific channel pages
+ * for detailed drill-down.
+ */
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  Mail, Phone, Globe, Share2, Target,
-  Inbox, Video, QrCode, Clock, RefreshCw,
+  Mail,
+  Truck,
+  CheckCircle2,
+  AlertTriangle,
+  Zap,
+  ArrowRight,
+  Clock,
+  RefreshCw,
 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { KPICard } from "@/components/dashboard/kpi-card";
+
+interface Mailer {
+  id: string;
+  name: string;
+  pieceCount: number;
+  deliveredCount: number;
+  deliveryRate: number;
+}
 
 export default function OverviewPage() {
-  const channelKpis = getChannelKPIs();
-  const totals = getAggregatedKPIs();
-  const timeSeries = getTimeSeriesData();
+  const [mailers, setMailers] = useState<Mailer[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
-  const lastUpdated = new Date().toLocaleString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
+  const load = () => {
+    setLoading(true);
+    fetch("/api/mailers")
+      .then((r) => r.json())
+      .then((d) => {
+        setMailers(d.mailers ?? []);
+        setLastUpdated(
+          new Date().toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        );
+      })
+      .finally(() => setLoading(false));
+  };
 
-  const randomDelta = () => Math.round((Math.random() * 40 - 15) * 10) / 10;
+  useEffect(() => {
+    load();
+  }, []);
 
-  const mailKpi = channelKpis["MAIL_TRACKING"] || { piecesDelivered: 0 };
-  const callKpi = channelKpis["CALL_TRACKING"] || { calls: 0, qualifiedCalls: 0 };
-  const googleKpi = channelKpis["GOOGLE_ADS"] || { impressions: 0, clicks: 0 };
-  const fbKpi = channelKpis["FACEBOOK_ADS"] || { impressions: 0, clicks: 0 };
-  const behavKpi = channelKpis["BEHAVIORAL_ADS"] || { impressions: 0 };
-  const gmailKpi = channelKpis["GMAIL_ADS"] || { impressions: 0, clicks: 0 };
-  const ytKpi = channelKpis["YOUTUBE_ADS"] || { impressions: 0 };
-  const qrKpi = channelKpis["QR_CODES"] || { qrScans: 0 };
+  const totalPieces = mailers.reduce((s, m) => s + m.pieceCount, 0);
+  const totalDelivered = mailers.reduce((s, m) => s + m.deliveredCount, 0);
+  const overallRate = totalPieces ? totalDelivered / totalPieces : 0;
+  const inTransit = totalPieces - totalDelivered;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
-          <p className="text-sm text-gray-500 mt-1">Campaign performance across all channels</p>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Portfolio-wide direct mail performance across all customers
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <Clock className="h-3.5 w-3.5" />
-            Last updated: {lastUpdated}
-          </div>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" />
+          {lastUpdated && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Clock className="h-3.5 w-3.5" />
+              Updated {lastUpdated}
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={load}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Real KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          label="Pieces Delivered"
-          value={mailKpi.piecesDelivered}
+          label="Total Pieces Tracked"
+          value={totalPieces}
           icon={Mail}
           iconColor="text-blue-600 bg-blue-100"
-          delta={randomDelta()}
-          helpText="Total mail pieces delivered across all campaigns"
+          helpText="Mailpieces imported into the portal across all customers"
         />
         <KPICard
-          label="Calls / Qualified"
-          value={callKpi.calls}
-          icon={Phone}
+          label="Delivered"
+          value={totalDelivered}
+          icon={CheckCircle2}
           iconColor="text-emerald-600 bg-emerald-100"
-          delta={randomDelta()}
-          helpText={`${callKpi.qualifiedCalls} qualified calls out of ${callKpi.calls} total`}
+          helpText="USPS has scanned as delivered or inferred delivered"
         />
         <KPICard
-          label="Google Ad Displays"
-          value={googleKpi.impressions}
-          icon={Globe}
-          iconColor="text-red-600 bg-red-100"
-          delta={randomDelta()}
-          helpText={`${googleKpi.clicks.toLocaleString()} clicks`}
-        />
-        <KPICard
-          label="Facebook Ad Displays"
-          value={fbKpi.impressions}
-          icon={Share2}
-          iconColor="text-indigo-600 bg-indigo-100"
-          delta={randomDelta()}
-          helpText={`${fbKpi.clicks.toLocaleString()} clicks`}
-        />
-        <KPICard
-          label="Behavioral Ad Displays"
-          value={behavKpi.impressions}
-          icon={Target}
+          label="In Transit"
+          value={inTransit}
+          icon={Truck}
           iconColor="text-amber-600 bg-amber-100"
-          delta={randomDelta()}
-          helpText="Retargeting ad impressions"
+          helpText="Accepted by USPS, not yet delivered"
         />
         <KPICard
-          label="Gmail Ad Displays"
-          value={gmailKpi.impressions}
-          icon={Inbox}
-          iconColor="text-pink-600 bg-pink-100"
-          delta={randomDelta()}
-          helpText={`${gmailKpi.clicks.toLocaleString()} clicks`}
-        />
-        <KPICard
-          label="YouTube Ad Displays"
-          value={ytKpi.impressions}
-          icon={Video}
-          iconColor="text-red-600 bg-red-100"
-          delta={randomDelta()}
-          helpText="YouTube video ad views"
-        />
-        <KPICard
-          label="QR Code Scans"
-          value={qrKpi.qrScans}
-          icon={QrCode}
+          label="Delivery Rate"
+          value={Number((overallRate * 100).toFixed(1))}
+          icon={CheckCircle2}
           iconColor="text-violet-600 bg-violet-100"
-          delta={randomDelta()}
-          helpText="Total QR code scans across campaigns"
+          format="percent"
+          helpText="Delivered / total pieces"
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Performance Over Time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TimeSeriesChart data={timeSeries} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Channel Mix</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ChannelPieChart data={channelKpis} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Full Width Bar Chart */}
+      {/* Per-customer quick view */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ad Displays by Channel</CardTitle>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Per-Customer Performance</CardTitle>
+          <Link
+            href="/dashboard/admin/mailers"
+            className="text-xs text-brand-600 hover:underline font-medium inline-flex items-center gap-1"
+          >
+            Manage all <ArrowRight className="h-3 w-3" />
+          </Link>
         </CardHeader>
         <CardContent>
-          <ChannelBarChart data={channelKpis} />
+          {mailers.length === 0 ? (
+            <div className="text-sm text-gray-400 text-center py-6">
+              {loading ? "Loading…" : "No customers yet."}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-gray-500 border-b">
+                  <tr>
+                    <th className="py-2">Customer</th>
+                    <th className="text-right">Pieces</th>
+                    <th className="text-right">Delivered</th>
+                    <th className="text-right">Delivery %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mailers.map((m) => (
+                    <tr key={m.id} className="border-b last:border-0">
+                      <td className="py-3 font-medium">{m.name}</td>
+                      <td className="text-right">
+                        {m.pieceCount.toLocaleString()}
+                      </td>
+                      <td className="text-right">
+                        {m.deliveredCount.toLocaleString()}
+                      </td>
+                      <td className="text-right font-medium">
+                        {(m.deliveryRate * 100).toFixed(1)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totals.impressions.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Impressions</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totals.clicks.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Clicks</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totals.leads.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Leads</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">${Math.round(totals.spend).toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Spend</p>
-        </div>
+      {/* Jump-offs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/dashboard/attribution">
+          <Card className="hover:shadow-md transition-shadow h-full">
+            <CardContent className="p-5 flex items-start gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-violet-100 text-violet-600 shrink-0">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">
+                  Cross-Channel Attribution
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Mail + QR + calls on one timeline per campaign
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/mail-tracking">
+          <Card className="hover:shadow-md transition-shadow h-full">
+            <CardContent className="p-5 flex items-start gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-100 text-blue-600 shrink-0">
+                <Mail className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">Mail Tracking</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Piece-level scan timelines and IMb drilldown
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/admin/ingestion">
+          <Card className="hover:shadow-md transition-shadow h-full">
+            <CardContent className="p-5 flex items-start gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-amber-100 text-amber-600 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">
+                  USPS Feed Health
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Monitor incoming scan events from USPS
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

@@ -24,21 +24,19 @@ import {
 const primaryNav: NavLink[] = [
   { label: "Dashboard", href: "/dashboard/overview", icon: LayoutDashboard },
   { label: "Direct Mail", href: "/dashboard/mail", icon: Mail },
-  { label: "Digital Ads", href: "/dashboard/digital-ads", icon: Megaphone },
-  { label: "Engagement", href: "/dashboard/engagement", icon: Phone },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
 ];
 
+// Admin-only navigation. Items that were pure placeholder (Digital Ads,
+// Engagement, Designs, Orders) removed until real integrations exist.
 const adminNav: NavLink[] = [
+  { label: "Customers", href: "/dashboard/admin/companies" },
   { label: "Campaigns", href: "/dashboard/admin/campaigns" },
-  { label: "Companies", href: "/dashboard/admin/companies" },
   { label: "Users", href: "/dashboard/admin/users" },
-  { label: "Mailers", href: "/dashboard/admin/mailers" },
-  { label: "Mail Import", href: "/dashboard/admin/mail-import" },
-  { label: "Feed Monitor", href: "/dashboard/admin/ingestion" },
+  { label: "API Keys", href: "/dashboard/admin/mailers" },
+  { label: "USPS Feed Monitor", href: "/dashboard/admin/ingestion" },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports" },
   { label: "Branding", href: "/dashboard/admin/branding" },
-  { label: "Designs", href: "/dashboard/designs" },
   { label: "Settings", href: "/dashboard/settings" },
 ];
 

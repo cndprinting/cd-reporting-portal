@@ -139,32 +139,32 @@ export function parseIMbJSON(json: string): ParsedMailDatPiece[] {
         ? obj.records
         : [];
 
-  return arr
-    .map((row) => {
-      const get = (...keys: string[]) => {
-        for (const k of keys) {
-          for (const actualKey of Object.keys(row)) {
-            if (actualKey.toLowerCase() === k.toLowerCase()) {
-              const v = row[actualKey];
-              if (v != null) return String(v);
-            }
+  const out: ParsedMailDatPiece[] = [];
+  for (const row of arr) {
+    const get = (...keys: string[]) => {
+      for (const k of keys) {
+        for (const actualKey of Object.keys(row)) {
+          if (actualKey.toLowerCase() === k.toLowerCase()) {
+            const v = row[actualKey];
+            if (v != null) return String(v);
           }
         }
-        return undefined;
-      };
-      const imb = (get("imb", "barcode", "intelligentmailbarcode") ?? "").replace(/\D/g, "");
-      if (!imb || !parseIMb(imb)) return null;
-      return {
-        imb,
-        recipientName: get("name", "recipientname", "fullname"),
-        addressLine1: get("address1", "addr1", "street"),
-        addressLine2: get("address2", "addr2"),
-        city: get("city"),
-        state: get("state"),
-        zip5: get("zip", "zip5", "zipcode"),
-        zip4: get("zip4", "plus4"),
-        jobId: get("jobid", "campaigncode"),
-      };
-    })
-    .filter((p): p is ParsedMailDatPiece => p !== null);
+      }
+      return undefined;
+    };
+    const imb = (get("imb", "barcode", "intelligentmailbarcode") ?? "").replace(/\D/g, "");
+    if (!imb || !parseIMb(imb)) continue;
+    out.push({
+      imb,
+      recipientName: get("name", "recipientname", "fullname"),
+      addressLine1: get("address1", "addr1", "street"),
+      addressLine2: get("address2", "addr2"),
+      city: get("city"),
+      state: get("state"),
+      zip5: get("zip", "zip5", "zipcode"),
+      zip4: get("zip4", "plus4"),
+      jobId: get("jobid", "campaigncode"),
+    });
+  }
+  return out;
 }

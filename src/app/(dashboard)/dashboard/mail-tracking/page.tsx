@@ -393,9 +393,13 @@ export default function MailTrackingPage() {
               <PackageSearch className="h-4 w-4" />
               Piece data updates every 15 min from USPS IV-MTR feed
             </div>
-            <button className="text-brand-600 hover:underline font-medium">
-              Export full list (CSV)
-            </button>
+            <a
+              href={`/api/mail-pieces/undeliverable?campaignId=${campaignId}`}
+              download
+              className="text-brand-600 hover:underline font-medium"
+            >
+              Export list (CSV)
+            </a>
           </div>
         </CardContent>
       </Card>

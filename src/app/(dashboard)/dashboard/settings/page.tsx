@@ -1,39 +1,60 @@
 "use client";
 
-import React, { useState } from "react";
-import { Settings, User, Bell, Lock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Settings as SettingsIcon, User, LogOut, HelpCircle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
+interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  companyName?: string | null;
+}
 
 export default function SettingsPage() {
-  const [name, setName] = useState("Sarah Johnson");
-  const [email, setEmail] = useState("demo@cdprinting.com");
-  const [notifications, setNotifications] = useState({
-    emailAlerts: true,
-    campaignUpdates: true,
-    weeklyDigest: false,
-    leadAlerts: true,
-  });
+  const [user, setUser] = useState<SessionUser | null>(null);
 
-  const toggleNotification = (key: keyof typeof notifications) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => setUser(d?.user ?? null))
+      .catch(() => {});
+  }, []);
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
+    window.location.href = "/login";
   };
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-96 text-gray-500">
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
-          <Settings className="h-5 w-5" />
+          <SettingsIcon className="h-5 w-5" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500">Manage your account preferences</p>
+          <p className="text-sm text-gray-500">
+            Your account details and sign-out
+          </p>
         </div>
       </div>
 
-      {/* Profile Section */}
+      {/* Profile */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -41,92 +62,67 @@ export default function SettingsPage() {
             <CardTitle>Profile</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <div className="text-xs text-gray-500 mb-1">Name</div>
+              <div className="font-medium text-gray-900">{user.name}</div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+              <div className="text-xs text-gray-500 mb-1">Email</div>
+              <div className="font-medium text-gray-900">{user.email}</div>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-            <Input value="C&D Printing Demo Account" disabled className="bg-gray-50" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <Input value="Admin" disabled className="bg-gray-50" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Notification Preferences */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-gray-500" />
-            <CardTitle>Notification Preferences</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[
-            { key: "emailAlerts" as const, label: "Email Alerts", desc: "Receive email notifications for important updates" },
-            { key: "campaignUpdates" as const, label: "Campaign Updates", desc: "Get notified when campaign status changes" },
-            { key: "weeklyDigest" as const, label: "Weekly Digest", desc: "Receive a weekly summary of campaign performance" },
-            { key: "leadAlerts" as const, label: "Lead Alerts", desc: "Instant notification when new leads come in" },
-          ].map((item) => (
-            <label
-              key={item.key}
-              className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
-            >
-              <div>
-                <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                <p className="text-xs text-gray-500">{item.desc}</p>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Company</div>
+              <div className="font-medium text-gray-900">
+                {user.companyName ?? "—"}
               </div>
-              <input
-                type="checkbox"
-                checked={notifications[item.key]}
-                onChange={() => toggleNotification(item.key)}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-              />
-            </label>
-          ))}
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Role</div>
+              <div className="font-medium text-gray-900">
+                {user.role.replace(/_/g, " ")}
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-6">
+            To change your name, email, or password, contact your C&amp;D account
+            manager.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Account Section */}
+      {/* Help */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-gray-500" />
-            <CardTitle>Account</CardTitle>
+            <HelpCircle className="h-5 w-5 text-gray-500" />
+            <CardTitle>Support</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-            <Input type="password" placeholder="Enter current password" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <Input type="password" placeholder="Enter new password" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-              <Input type="password" placeholder="Confirm new password" />
-            </div>
-          </div>
+        <CardContent>
+          <p className="text-sm text-gray-600">
+            Questions about your campaigns or tracking data? Email{" "}
+            <a
+              href="mailto:support@cndprinting.com"
+              className="text-brand-600 hover:underline font-medium"
+            >
+              support@cndprinting.com
+            </a>{" "}
+            or contact your account manager.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button className="bg-brand-600 hover:bg-brand-700 text-white px-8">
-          Save Changes
+      {/* Sign out */}
+      <div>
+        <Button
+          variant="outline"
+          className="text-red-600 border-red-200 hover:bg-red-50"
+          onClick={handleSignOut}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign out
         </Button>
       </div>
     </div>
