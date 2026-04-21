@@ -461,6 +461,11 @@ model Order {
   updatedAt    DateTime     @updatedAt
   droppedAt    DateTime?
 
+  // Customer's mailing list (recipient addresses) — CSV/XLSX/TXT uploaded by rep or customer
+  mailingListUrl       String?
+  mailingListFileName  String?
+  mailingListUploadedAt DateTime?
+
   proof        OrderProof?
   approval     OrderApproval?
   drawdowns    PackageDrawdown[]

@@ -19,6 +19,8 @@ import {
   Clock,
   ArrowLeft,
   RotateCw,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,9 @@ interface OrderDetail {
   paidAt: string | null;
   droppedAt: string | null;
   createdAt: string;
+  mailingListUrl: string | null;
+  mailingListFileName: string | null;
+  mailingListUploadedAt: string | null;
   company: {
     id: string;
     name: string;
@@ -227,6 +232,72 @@ export default function OrderDetailPage() {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Mailing List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            Mailing List
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {order.mailingListUrl ? (
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileSpreadsheet className="h-8 w-8 text-emerald-600 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">
+                    {order.mailingListFileName ?? "Mailing list"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    Uploaded{" "}
+                    {order.mailingListUploadedAt
+                      ? new Date(order.mailingListUploadedAt).toLocaleString()
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={order.mailingListUrl}
+                  download
+                  className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline font-medium"
+                >
+                  <Download className="h-3 w-3" /> Download
+                </a>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy === "Remove list"}
+                    onClick={() =>
+                      run("Remove list", () =>
+                        fetch(`/api/orders/${id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            mailingListUrl: null,
+                            mailingListFileName: null,
+                          }),
+                        }),
+                      )
+                    }
+                  >
+                    Replace
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : isAdmin ? (
+            <MailingListUploader orderId={id!} onUploaded={reload} />
+          ) : (
+            <div className="text-sm text-gray-400 italic">
+              No list uploaded yet. Your C&amp;D rep will attach it when it's ready.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -586,6 +657,83 @@ function ProofUploader({
         </div>
       )}
 
+      {err && (
+        <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * MailingListUploader — admin uploads the customer's recipient list (CSV/XLSX/TXT).
+ * File goes to Vercel Blob, then we PATCH the Order with the URL + filename.
+ */
+function MailingListUploader({
+  orderId,
+  onUploaded,
+}: {
+  orderId: string;
+  onUploaded: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handle = async (file: File) => {
+    setUploading(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/uploads", { method: "POST", body: fd });
+      const upData = await up.json();
+      if (!up.ok) throw new Error(upData.error ?? "Upload failed");
+
+      const patch = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mailingListUrl: upData.url,
+          mailingListFileName: file.name,
+        }),
+      });
+      if (!patch.ok) {
+        const d = await patch.json();
+        throw new Error(d.error ?? "Failed to attach list to order");
+      }
+      onUploaded();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label
+        className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+          uploading
+            ? "opacity-60 pointer-events-none"
+            : "border-gray-300 hover:border-emerald-400 hover:bg-emerald-50"
+        }`}
+      >
+        <input
+          type="file"
+          accept=".csv,.xlsx,.xls,.txt,text/csv"
+          className="hidden"
+          disabled={uploading}
+          onChange={(e) => e.target.files?.[0] && handle(e.target.files[0])}
+        />
+        <FileSpreadsheet className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+        <div className="text-sm font-medium text-gray-700">
+          {uploading ? "Uploading list…" : "Click to upload recipient list"}
+        </div>
+        <div className="text-xs text-gray-400 mt-1">
+          CSV, XLSX, or TXT · max 20 MB
+        </div>
+      </label>
       {err && (
         <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
           {err}

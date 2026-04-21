@@ -70,11 +70,16 @@ export async function PATCH(
     "totalPrice",
     "status",
     "packageId",
+    "mailingListUrl",
+    "mailingListFileName",
   ]) {
     if (field in body) {
       if (field === "dropDate" && body[field]) updatable[field] = new Date(body[field]);
       else updatable[field] = body[field];
     }
+  }
+  if ("mailingListUrl" in body) {
+    updatable.mailingListUploadedAt = body.mailingListUrl ? new Date() : null;
   }
 
   // If transitioning to DROPPED, stamp droppedAt
