@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Shield,
   Palette,
+  Package,
 } from "lucide-react";
 
 /**
@@ -23,6 +24,7 @@ import {
  */
 const primaryNav: NavLink[] = [
   { label: "Dashboard", href: "/dashboard/overview", icon: LayoutDashboard },
+  { label: "Orders", href: "/dashboard/orders", icon: Package },
   { label: "Direct Mail", href: "/dashboard/mail", icon: Mail },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
 ];
@@ -30,6 +32,7 @@ const primaryNav: NavLink[] = [
 // Admin-only navigation. Items that were pure placeholder (Digital Ads,
 // Engagement, Designs, Orders) removed until real integrations exist.
 const adminNav: NavLink[] = [
+  { label: "Orders", href: "/dashboard/admin/orders" },
   { label: "Customers", href: "/dashboard/admin/companies" },
   { label: "Campaigns", href: "/dashboard/admin/campaigns" },
   { label: "Users", href: "/dashboard/admin/users" },

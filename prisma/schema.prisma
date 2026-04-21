@@ -31,6 +31,27 @@ enum ChannelType {
   QR_CODES
 }
 
+// -------- Order lifecycle (PostcardMania-style flow) --------
+
+enum OrderStatus {
+  DRAFT           // rep is filling it in
+  IN_PREP         // sent to mail production (AccuZIP)
+  PROOF_READY     // merge proof uploaded, awaiting customer approval
+  APPROVED        // customer approved + payment captured
+  SCHEDULED       // dropped date set, waiting for induction
+  DROPPED         // admin marked as handed to USPS
+  DELIVERING      // USPS scans flowing in
+  COMPLETE        // all pieces delivered (or window closed)
+  CANCELLED       // rejected/refunded
+}
+
+enum PackageStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  REFUNDED
+}
+
 // -------- USPS IV-MTR / IMb tracking --------
 
 enum MailPieceStatus {
@@ -102,6 +123,10 @@ model Company {
   managers    CompanyManager[]
   mailPieces  MailPiece[]
   apiKeys     ApiKey[]
+  orders      Order[]
+  mailPackages MailPackage[]
+  // Saved Stripe customer id (lets us charge the card on file)
+  stripeCustomerId String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -139,6 +164,7 @@ model Campaign {
   callLogs        CallLogSummary[]
   assets          Asset[]
   mailPieces      MailPiece[]
+  orders          Order[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -395,4 +421,126 @@ model ReportExport {
   fileUrl    String?
   filters    String?
   createdAt  DateTime @default(now())
+}
+
+// -------- Order model — the central object of the PostcardMania flow --------
+// An Order represents one mailing: customer + quantity + drop date + price + status.
+// Rep creates it in the portal; it moves through statuses as production + approval
+// + payment + drop + delivery happen.
+model Order {
+  id           String       @id @default(cuid())
+  orderCode    String       @unique // human-readable "CD-2026-AARON-001", used for AccuZIP filename convention
+  companyId    String
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // A campaign represents the marketing concept; one campaign may have many orders (recurring mailings).
+  campaignId   String
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Order details
+  description  String?      // "Spring homeowner mailer, 6x9 postcard"
+  quantity     Int
+  dropDate     DateTime?    @db.Date
+  mailClass    String?      // "First-Class", "Marketing Mail"
+  mailShape    String?      // "letter", "flat", "postcard"
+  // Pricing
+  pricePerPiece Float?
+  setupFee     Float?
+  totalPrice   Float?
+  // Lifecycle
+  status       OrderStatus  @default(DRAFT)
+  // Stripe
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+  stripeInvoiceUrl      String?
+  paidAt                DateTime?
+  // Package-billing source (if the order draws pieces from a prepaid MailPackage)
+  packageId    String?
+  package      MailPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  // Audit
+  createdBy    String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  droppedAt    DateTime?
+
+  proof        OrderProof?
+  approval     OrderApproval?
+  drawdowns    PackageDrawdown[]
+
+  @@index([companyId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([orderCode])
+}
+
+model OrderProof {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pdfUrl     String
+  fileName   String?
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  notes      String?
+}
+
+model OrderApproval {
+  id             String   @id @default(cuid())
+  orderId        String   @unique
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  approvedByUserId String
+  approvedByName String
+  approvedAt     DateTime @default(now())
+  // Payment at time of approval
+  stripeChargeId String?
+  stripePaymentIntentId String?
+  amountCharged  Float
+  ipAddress      String?
+  userAgent      String?
+}
+
+// -------- Package-based billing — customer prepurchases N pieces --------
+model MailPackage {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name          String        // "10,000-piece package"
+  totalPieces   Int
+  usedPieces    Int           @default(0)
+  price         Float
+  pricePerPiece Float         // denormalized for quick display
+  status        PackageStatus @default(ACTIVE)
+  purchasedAt   DateTime      @default(now())
+  expiresAt     DateTime?
+  stripeChargeId        String?
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+
+  orders        Order[]
+  drawdowns     PackageDrawdown[]
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// Audit trail: every time an order draws pieces from a package
+model PackageDrawdown {
+  id        String   @id @default(cuid())
+  packageId String
+  package   MailPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  pieces    Int
+  note      String?
+  drawnAt   DateTime @default(now())
+
+  @@index([packageId])
+}
+
+// -------- Drop notification log — so we don't send duplicate "landed" emails --------
+model DropNotification {
+  id         String   @id @default(cuid())
+  orderId    String
+  sentAt     DateTime @default(now())
+  recipients String // comma-separated
+  status     String  // "sent", "failed"
+  errorMessage String?
 }

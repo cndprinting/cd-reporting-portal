@@ -1,72 +1,167 @@
 "use client";
 
-import { ShoppingCart } from "lucide-react";
+/**
+ * Customer-facing orders list — scoped to their company.
+ * Admins get redirected to /dashboard/admin/orders.
+ */
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
+  Package,
+  Clock,
+  FileCheck,
+  CreditCard,
+  Send,
+  Truck,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const orders = [
-  { id: "ORD-2026-001", date: "2026-03-28", campaign: "Spring Homeowner Mailer", status: "Delivered", amount: "$4,250.00" },
-  { id: "ORD-2026-002", date: "2026-03-15", campaign: "South Florida Prospecting", status: "In Production", amount: "$3,800.00" },
-  { id: "ORD-2026-003", date: "2026-03-01", campaign: "Investor Lead Gen Q2", status: "Shipped", amount: "$2,950.00" },
-  { id: "ORD-2026-004", date: "2026-02-20", campaign: "Geo-Targeted Retargeting Push", status: "Delivered", amount: "$1,600.00" },
-  { id: "ORD-2026-005", date: "2026-02-10", campaign: "Luxury Home Seller Campaign", status: "Delivered", amount: "$5,100.00" },
-];
+interface Order {
+  id: string;
+  orderCode: string;
+  description: string | null;
+  quantity: number;
+  dropDate: string | null;
+  totalPrice: number | null;
+  status: string;
+  company: { id: string; name: string };
+  campaign: { id: string; name: string; campaignCode: string };
+  proof: { pdfUrl: string } | null;
+  approval: { approvedAt: string } | null;
+}
 
-const statusColors: Record<string, string> = {
-  Delivered: "bg-emerald-100 text-emerald-700",
-  "In Production": "bg-amber-100 text-amber-700",
-  Shipped: "bg-blue-100 text-blue-700",
+const STATUS_LABEL: Record<
+  string,
+  { label: string; icon: typeof Package; color: string; needsAction: boolean }
+> = {
+  DRAFT: { label: "Draft", icon: Clock, color: "bg-slate-100 text-slate-700", needsAction: false },
+  IN_PREP: { label: "Being prepared", icon: Package, color: "bg-amber-100 text-amber-700", needsAction: false },
+  PROOF_READY: { label: "Proof ready — approve now", icon: FileCheck, color: "bg-sky-100 text-sky-700", needsAction: true },
+  APPROVED: { label: "Approved + paid", icon: CreditCard, color: "bg-violet-100 text-violet-700", needsAction: false },
+  SCHEDULED: { label: "Scheduled", icon: Send, color: "bg-indigo-100 text-indigo-700", needsAction: false },
+  DROPPED: { label: "In the mail", icon: Truck, color: "bg-blue-100 text-blue-700", needsAction: false },
+  DELIVERING: { label: "Delivering", icon: Truck, color: "bg-blue-100 text-blue-700", needsAction: false },
+  COMPLETE: { label: "Complete", icon: CheckCircle2, color: "bg-emerald-100 text-emerald-700", needsAction: false },
+  CANCELLED: { label: "Cancelled", icon: XCircle, color: "bg-rose-100 text-rose-700", needsAction: false },
 };
 
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => {
+        const role = d?.user?.role;
+        if (role === "ADMIN" || role === "ACCOUNT_MANAGER") {
+          router.replace("/dashboard/admin/orders");
+          return;
+        }
+        return fetch("/api/orders")
+          .then((r) => r.json())
+          .then((d) => setOrders(d.orders ?? []));
+      })
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  const needsAction = orders.filter((o) => STATUS_LABEL[o.status]?.needsAction);
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
-          <ShoppingCart className="h-5 w-5" />
+          <Package className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-          <p className="text-sm text-gray-500">Track your print and campaign orders</p>
+          <h1 className="text-2xl font-bold text-gray-900">Your Orders</h1>
+          <p className="text-sm text-gray-500">
+            Mailings in prep, awaiting approval, or already in the mail
+          </p>
         </div>
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order #</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Campaign</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell className="font-medium">{order.id}</TableCell>
-                <TableCell>{new Date(order.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</TableCell>
-                <TableCell>{order.campaign}</TableCell>
-                <TableCell>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || "bg-gray-100 text-gray-700"}`}>
-                    {order.status}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right font-medium">{order.amount}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {needsAction.length > 0 && (
+        <Card className="border-sky-200 bg-sky-50">
+          <CardContent className="py-4 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-sky-600 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold text-sky-900">
+                {needsAction.length} order{needsAction.length > 1 ? "s" : ""} waiting for your approval
+              </div>
+              <div className="text-sky-700 text-xs mt-0.5">
+                Review the merge proof, then click Approve to schedule the drop.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {loading ? (
+        <div className="text-center py-12 text-gray-400">Loading your orders…</div>
+      ) : orders.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-gray-400">
+            <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+            <p>No orders yet.</p>
+            <p className="text-xs mt-1">
+              Your C&amp;D rep will create orders on your behalf and send them here for approval.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((o) => {
+            const s = STATUS_LABEL[o.status] ?? STATUS_LABEL.DRAFT;
+            const Icon = s.icon;
+            return (
+              <Link key={o.id} href={`/dashboard/orders/${o.id}`}>
+                <Card
+                  className={`hover:shadow-md transition-shadow ${
+                    s.needsAction ? "border-sky-300 ring-1 ring-sky-200" : ""
+                  }`}
+                >
+                  <CardContent className="p-5 flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div
+                        className={`flex items-center justify-center h-10 w-10 rounded-lg ${s.color} shrink-0`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-mono text-sm font-semibold">{o.orderCode}</div>
+                          <Badge className={s.color}>{s.label}</Badge>
+                        </div>
+                        <div className="text-sm text-gray-700 mt-0.5">
+                          {o.description ?? "Mailing"}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {o.quantity.toLocaleString()} pieces
+                          {o.dropDate && ` · Drop ${new Date(o.dropDate).toLocaleDateString()}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-gray-900">
+                        {o.totalPrice ? `$${o.totalPrice.toFixed(2)}` : "—"}
+                      </div>
+                      <div className="text-xs text-brand-600 hover:underline mt-1">View →</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
