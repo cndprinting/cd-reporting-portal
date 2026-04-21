@@ -53,15 +53,70 @@ export async function POST(req: NextRequest) {
   const fileName = req.headers.get("x-file-name") ?? undefined;
 
   try {
+    let parsedBody: unknown = body;
+    if (contentType.includes("json")) {
+      parsedBody = JSON.parse(body);
+    } else if (contentType.includes("xml") || body.trimStart().startsWith("<")) {
+      // USPS Mail.XML / IMb Tracing .pkg feed — naive scan-record extraction.
+      // Pulls <ScanEvent> (or <Scan>) elements into our IVScanRecord shape.
+      parsedBody = parseXMLScans(body);
+    }
+    // else: treat as CSV / delimited — ingestIVFile handles that case natively
+
     const result = await ingestIVFile({
       source: "iv-mtr-push",
       fileName,
-      body: contentType.includes("json") ? JSON.parse(body) : body,
+      body: parsedBody as string | import("@/lib/services/iv-mtr-ingest").IVScanRecord[],
     });
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
+}
+
+/**
+ * Very-light XML scan parser. Extracts fields via regex rather than pulling in
+ * an XML dependency. Works on the USPS IMb Tracing / Mail.XML feed shape:
+ *   <ScanEvents>
+ *     <ScanEvent>
+ *       <IMb>...</IMb>
+ *       <ScanDateTime>...</ScanDateTime>
+ *       <OperationCode>...</OperationCode>
+ *       <FacilityZip>...</FacilityZip>
+ *       ...
+ *     </ScanEvent>
+ *   </ScanEvents>
+ */
+function parseXMLScans(xml: string): import("@/lib/services/iv-mtr-ingest").IVScanRecord[] {
+  const records: import("@/lib/services/iv-mtr-ingest").IVScanRecord[] = [];
+  const scanRegex = /<(?:ScanEvent|Scan)\b[^>]*>([\s\S]*?)<\/(?:ScanEvent|Scan)>/g;
+  const fieldRegex = (name: string) =>
+    new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, "i");
+  const pick = (xml: string, name: string): string | undefined => {
+    const m = xml.match(fieldRegex(name));
+    return m?.[1]?.trim();
+  };
+  let m: RegExpExecArray | null;
+  while ((m = scanRegex.exec(xml))) {
+    const blob = m[1];
+    const imb = pick(blob, "IMb") ?? pick(blob, "ImbSerialNumber") ?? pick(blob, "IntelligentMailBarcode");
+    const scanDateTime = pick(blob, "ScanDateTime") ?? pick(blob, "EventDateTime") ?? pick(blob, "DateTime");
+    if (!imb || !scanDateTime) continue;
+    records.push({
+      imb,
+      scanDateTime,
+      operationCode: pick(blob, "OperationCode") ?? pick(blob, "OpCode"),
+      operationDesc: pick(blob, "OperationDescription") ?? pick(blob, "EventDescription"),
+      facilityZip: pick(blob, "FacilityZip") ?? pick(blob, "FacilityZipCode"),
+      facilityCity: pick(blob, "FacilityCity"),
+      facilityState: pick(blob, "FacilityState"),
+      facilityType: pick(blob, "FacilityType"),
+      machineId: pick(blob, "MachineId") ?? pick(blob, "MachineID"),
+      runId: pick(blob, "RunId") ?? pick(blob, "RunID"),
+      predictedDeliveryDate: pick(blob, "PredictedDeliveryDate"),
+    });
+  }
+  return records;
 }
 
 // USPS sends a test ping as GET first before the first POST — respond 200
