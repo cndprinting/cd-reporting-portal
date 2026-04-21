@@ -38,7 +38,8 @@ export async function GET(
       mailBatches: { orderBy: { dropDate: "asc" }, take: 1 },
     },
   });
-  if (!campaign) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // Fall back to demo data when the campaign isn't in the DB yet (e.g., demo IDs like "camp-1")
+  if (!campaign) return NextResponse.json(demoAttribution(campaignId));
 
   const dropDate =
     campaign.mailBatches[0]?.dropDate ?? campaign.startDate ?? campaign.setupDate;
