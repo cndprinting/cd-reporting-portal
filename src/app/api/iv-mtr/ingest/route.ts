@@ -1,42 +1,73 @@
 /**
- * USPS IV-MTR ingestion endpoint.
+ * USPS IV-MTR / Subscriptions-Tracking ingestion endpoint.
+ *
+ * Accepts webhook push from USPS's Subscriptions-Tracking API (apis.usps.com)
+ * as well as manual CSV/JSON uploads.
  *
  * POST /api/iv-mtr/ingest
- *   - Accept either application/json (array of scan records), text/csv, or XML
- *   - Auth (either works):
- *     - Header `x-iv-mtr-key` matching IV_MTR_INGEST_KEY env (for manual/internal callers)
- *     - HTTP Basic Auth where username=IV_MTR_PUSH_USER, password=IV_MTR_INGEST_KEY
- *       (this is the format USPS IV-MTR uses when it pushes to "HTTPS JSON" targets
- *       registered in its Address Book)
- *   - Used by: USPS IV-MTR push target, scheduled pull worker, or manual admin upload
+ *   - JSON body (USPS webhook format) — primary path
+ *   - XML body (legacy Mail.XML) — parsed for legacy IV-MTR feeds
+ *   - CSV body — for manual admin uploads
  *
- * Response: { ingestionId, received, inserted, skipped, unknownImbs, errors[] }
+ * Auth (any of these works):
+ *   - secret in body matches IV_MTR_INGEST_KEY  ← primary (USPS subscription secret)
+ *   - `x-webhook-secret` header matches IV_MTR_INGEST_KEY
+ *   - HTTP Basic Auth (user=IV_MTR_PUSH_USER, pass=IV_MTR_INGEST_KEY)
+ *   - custom `x-iv-mtr-key` header matches IV_MTR_INGEST_KEY
+ *
+ * GET /api/iv-mtr/ingest
+ *   - Returns 200 OK (used by USPS during subscription URL verification)
+ *   - Echoes any `challenge` query param (for webhook verification handshake)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { ingestIVFile } from "@/lib/services/iv-mtr-ingest";
+import { ingestIVFile, type IVScanRecord } from "@/lib/services/iv-mtr-ingest";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 min for large batches
+export const maxDuration = 300;
 
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.IV_MTR_INGEST_KEY;
-  if (!secret) return false;
+const SECRET = process.env.IV_MTR_INGEST_KEY ?? "";
+const BASIC_USER = process.env.IV_MTR_PUSH_USER ?? "cndprinting";
 
-  // Option 1: custom header (internal/manual callers)
-  const headerKey = req.headers.get("x-iv-mtr-key");
-  if (headerKey && headerKey === secret) return true;
+function matchesSecret(candidate: string | null | undefined): boolean {
+  return !!SECRET && !!candidate && candidate === SECRET;
+}
 
-  // Option 2: HTTP Basic Auth (USPS IV-MTR push format)
+function isAuthorized(req: NextRequest, body: string): boolean {
+  if (!SECRET) return false;
+
+  // 1. Header: x-iv-mtr-key
+  if (matchesSecret(req.headers.get("x-iv-mtr-key"))) return true;
+
+  // 2. Header: x-webhook-secret (common USPS pattern)
+  if (matchesSecret(req.headers.get("x-webhook-secret"))) return true;
+
+  // 3. Header: x-usps-webhook-secret
+  if (matchesSecret(req.headers.get("x-usps-webhook-secret"))) return true;
+
+  // 4. HTTP Basic Auth
   const auth = req.headers.get("authorization");
-  if (auth && auth.startsWith("Basic ")) {
+  if (auth?.startsWith("Basic ")) {
     try {
-      const decoded = Buffer.from(auth.slice("Basic ".length), "base64").toString("utf-8");
-      const [user, pass] = decoded.split(":");
-      const expectedUser = process.env.IV_MTR_PUSH_USER ?? "cndprinting";
-      if (user === expectedUser && pass === secret) return true;
+      const [user, pass] = Buffer.from(auth.slice(6), "base64")
+        .toString("utf-8")
+        .split(":");
+      if (user === BASIC_USER && matchesSecret(pass)) return true;
     } catch {
-      // fall through
+      /* ignore */
+    }
+  }
+
+  // 5. Bearer with our secret
+  if (auth?.startsWith("Bearer ") && matchesSecret(auth.slice(7))) return true;
+
+  // 6. secret in JSON body (USPS subscription sends this)
+  if (body.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(body);
+      if (matchesSecret(parsed.secret)) return true;
+    } catch {
+      /* ignore */
     }
   }
 
@@ -44,63 +75,84 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
   const contentType = req.headers.get("content-type") ?? "";
   const body = await req.text();
   const fileName = req.headers.get("x-file-name") ?? undefined;
 
+  // Log every incoming push so we can see USPS's actual format in Vercel logs
+  console.log("[iv-mtr/ingest] POST", {
+    contentType,
+    bodyLen: body.length,
+    bodyPreview: body.slice(0, 300),
+    headers: Object.fromEntries(
+      [...req.headers.entries()].filter(
+        ([k]) => !["cookie", "authorization"].includes(k.toLowerCase()),
+      ),
+    ),
+  });
+
+  if (!isAuthorized(req, body)) {
+    console.warn("[iv-mtr/ingest] unauthorized request");
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   try {
-    let parsedBody: unknown = body;
-    if (contentType.includes("json")) {
-      parsedBody = JSON.parse(body);
+    let parsedBody: string | IVScanRecord[] = body;
+    if (contentType.includes("json") || body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) {
+      const obj = JSON.parse(body);
+      // USPS may wrap events in { events: [...] } or { trackingEvents: [...] }
+      if (Array.isArray(obj)) parsedBody = obj as IVScanRecord[];
+      else if (Array.isArray(obj.events)) parsedBody = obj.events as IVScanRecord[];
+      else if (Array.isArray(obj.trackingEvents)) parsedBody = obj.trackingEvents as IVScanRecord[];
+      else if (Array.isArray(obj.scans)) parsedBody = obj.scans as IVScanRecord[];
+      else parsedBody = [obj as IVScanRecord]; // single event push
     } else if (contentType.includes("xml") || body.trimStart().startsWith("<")) {
-      // USPS Mail.XML / IMb Tracing .pkg feed — naive scan-record extraction.
-      // Pulls <ScanEvent> (or <Scan>) elements into our IVScanRecord shape.
       parsedBody = parseXMLScans(body);
     }
-    // else: treat as CSV / delimited — ingestIVFile handles that case natively
 
     const result = await ingestIVFile({
       source: "iv-mtr-push",
       fileName,
-      body: parsedBody as string | import("@/lib/services/iv-mtr-ingest").IVScanRecord[],
+      body: parsedBody,
     });
     return NextResponse.json(result);
   } catch (e) {
+    console.error("[iv-mtr/ingest] error", e);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
 
-/**
- * Very-light XML scan parser. Extracts fields via regex rather than pulling in
- * an XML dependency. Works on the USPS IMb Tracing / Mail.XML feed shape:
- *   <ScanEvents>
- *     <ScanEvent>
- *       <IMb>...</IMb>
- *       <ScanDateTime>...</ScanDateTime>
- *       <OperationCode>...</OperationCode>
- *       <FacilityZip>...</FacilityZip>
- *       ...
- *     </ScanEvent>
- *   </ScanEvents>
- */
-function parseXMLScans(xml: string): import("@/lib/services/iv-mtr-ingest").IVScanRecord[] {
-  const records: import("@/lib/services/iv-mtr-ingest").IVScanRecord[] = [];
+// USPS verification ping — return 200 with echoed challenge if present
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const challenge = url.searchParams.get("challenge") ?? url.searchParams.get("hub.challenge");
+  if (challenge) {
+    return new Response(challenge, {
+      headers: { "content-type": "text/plain" },
+    });
+  }
+  return NextResponse.json({
+    ok: true,
+    message: "IV-MTR ingest endpoint ready",
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/** Lightweight XML scan parser for legacy Mail.XML payloads. */
+function parseXMLScans(xml: string): IVScanRecord[] {
+  const records: IVScanRecord[] = [];
   const scanRegex = /<(?:ScanEvent|Scan)\b[^>]*>([\s\S]*?)<\/(?:ScanEvent|Scan)>/g;
-  const fieldRegex = (name: string) =>
-    new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, "i");
-  const pick = (xml: string, name: string): string | undefined => {
-    const m = xml.match(fieldRegex(name));
+  const pick = (blob: string, name: string): string | undefined => {
+    const m = blob.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"));
     return m?.[1]?.trim();
   };
   let m: RegExpExecArray | null;
   while ((m = scanRegex.exec(xml))) {
     const blob = m[1];
-    const imb = pick(blob, "IMb") ?? pick(blob, "ImbSerialNumber") ?? pick(blob, "IntelligentMailBarcode");
-    const scanDateTime = pick(blob, "ScanDateTime") ?? pick(blob, "EventDateTime") ?? pick(blob, "DateTime");
+    const imb =
+      pick(blob, "IMb") ?? pick(blob, "ImbSerialNumber") ?? pick(blob, "IntelligentMailBarcode");
+    const scanDateTime =
+      pick(blob, "ScanDateTime") ?? pick(blob, "EventDateTime") ?? pick(blob, "DateTime");
     if (!imb || !scanDateTime) continue;
     records.push({
       imb,
@@ -117,12 +169,4 @@ function parseXMLScans(xml: string): import("@/lib/services/iv-mtr-ingest").IVSc
     });
   }
   return records;
-}
-
-// USPS sends a test ping as GET first before the first POST — respond 200
-export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  return NextResponse.json({ ok: true, message: "IV-MTR ingest endpoint ready" });
 }
