@@ -37,6 +37,7 @@ const adminNav: NavLink[] = [
   { label: "Campaigns", href: "/dashboard/admin/campaigns" },
   { label: "Users", href: "/dashboard/admin/users" },
   { label: "API Keys", href: "/dashboard/admin/mailers" },
+  { label: "Mail Import (manual)", href: "/dashboard/admin/mail-import" },
   { label: "USPS Feed Monitor", href: "/dashboard/admin/ingestion" },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports" },
   { label: "Branding", href: "/dashboard/admin/branding" },
