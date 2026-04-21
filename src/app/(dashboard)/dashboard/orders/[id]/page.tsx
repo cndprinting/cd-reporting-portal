@@ -87,9 +87,7 @@ export default function OrderDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // Proof upload form (admin)
-  const [proofUrl, setProofUrl] = useState("");
-  const [proofNotes, setProofNotes] = useState("");
+  const [proofNotes] = useState("");
 
   const reload = () => {
     setLoading(true);
@@ -321,43 +319,7 @@ export default function OrderDetailPage() {
               </div>
             )}
 
-            {isAdmin && (
-              <div className="mt-4 border-t pt-4 space-y-2">
-                <label className="text-xs text-gray-600 block">Proof URL</label>
-                <Input
-                  placeholder="https://..."
-                  value={proofUrl}
-                  onChange={(e) => setProofUrl(e.target.value)}
-                  className="text-xs"
-                />
-                <Input
-                  placeholder="Notes (optional)"
-                  value={proofNotes}
-                  onChange={(e) => setProofNotes(e.target.value)}
-                  className="text-xs"
-                />
-                <Button
-                  size="sm"
-                  className="w-full"
-                  disabled={!proofUrl || busy === "Proof upload"}
-                  onClick={() =>
-                    run("Proof upload", () =>
-                      fetch(`/api/orders/${id}/proof`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          pdfUrl: proofUrl,
-                          notes: proofNotes,
-                        }),
-                      }),
-                    )
-                  }
-                >
-                  <Upload className="h-3 w-3 mr-1" />
-                  {busy === "Proof upload" ? "Uploading…" : "Upload Proof"}
-                </Button>
-              </div>
-            )}
+            {isAdmin && <ProofUploader orderId={id!} notes={proofNotes} onUploaded={reload} />}
           </CardContent>
         </Card>
       </div>
@@ -488,6 +450,147 @@ export default function OrderDetailPage() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * ProofUploader — admin can either upload a PDF file directly or paste a URL.
+ * Uploaded files go to Vercel Blob and become the proof's pdfUrl automatically.
+ */
+function ProofUploader({
+  orderId,
+  notes: _notes,
+  onUploaded,
+}: {
+  orderId: string;
+  notes: string;
+  onUploaded: () => void;
+}) {
+  const [mode, setMode] = useState<"upload" | "url">("upload");
+  const [url, setUrl] = useState("");
+  const [localNotes, setLocalNotes] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submitUrl = async (pdfUrl: string) => {
+    const r = await fetch(`/api/orders/${orderId}/proof`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfUrl, notes: localNotes }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error || "Proof submit failed");
+    }
+    onUploaded();
+  };
+
+  const handleUploadFile = async (file: File) => {
+    setUploading(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/uploads", { method: "POST", body: fd });
+      const upData = await up.json();
+      if (!up.ok) throw new Error(upData.error ?? "Upload failed");
+      await submitUrl(upData.url);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handlePasteSubmit = async () => {
+    if (!url) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      await submitUrl(url);
+      setUrl("");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t pt-4 space-y-3">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-colors ${
+            mode === "upload" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+          }`}
+        >
+          Upload PDF
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("url")}
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-colors ${
+            mode === "url" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+          }`}
+        >
+          Paste URL
+        </button>
+      </div>
+
+      <Input
+        placeholder="Notes (optional)"
+        value={localNotes}
+        onChange={(e) => setLocalNotes(e.target.value)}
+        className="text-xs"
+      />
+
+      {mode === "upload" ? (
+        <label
+          className={`block border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+            uploading ? "opacity-60 pointer-events-none" : "border-gray-300 hover:border-brand-400 hover:bg-brand-50"
+          }`}
+        >
+          <input
+            type="file"
+            accept="application/pdf,image/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => e.target.files?.[0] && handleUploadFile(e.target.files[0])}
+          />
+          <Upload className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+          <div className="text-xs font-medium text-gray-700">
+            {uploading ? "Uploading…" : "Click to upload PDF or image"}
+          </div>
+          <div className="text-[10px] text-gray-400 mt-0.5">Max 20 MB</div>
+        </label>
+      ) : (
+        <div className="space-y-2">
+          <Input
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="text-xs"
+          />
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={!url || uploading}
+            onClick={handlePasteSubmit}
+          >
+            <Upload className="h-3 w-3 mr-1" />
+            {uploading ? "Saving…" : "Save Proof URL"}
+          </Button>
+        </div>
+      )}
+
+      {err && (
+        <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
+          {err}
+        </div>
+      )}
     </div>
   );
 }
