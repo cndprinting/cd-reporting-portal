@@ -110,6 +110,31 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // If we came back from Stripe Checkout, verify + approve
+  useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    const sp = new URLSearchParams(window.location.search);
+    const stripeSession = sp.get("stripe_session");
+    if (stripeSession) {
+      fetch(`/api/orders/${id}/checkout?session_id=${stripeSession}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.ok) {
+            setMsg({ ok: true, text: "Payment captured — order approved" });
+            reload();
+          } else {
+            setMsg({ ok: false, text: d.error ?? "Payment verification failed" });
+          }
+          // Clean URL
+          window.history.replaceState({}, "", `/dashboard/orders/${id}`);
+        });
+    } else if (sp.get("stripe_cancelled")) {
+      setMsg({ ok: false, text: "Payment cancelled" });
+      window.history.replaceState({}, "", `/dashboard/orders/${id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const isAdmin = me?.role === "ADMIN" || me?.role === "ACCOUNT_MANAGER";
   const isCustomer = me?.role === "CUSTOMER";
 
@@ -442,14 +467,42 @@ export default function OrderDetailPage() {
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                     size="lg"
                     disabled={busy === "Approve"}
-                    onClick={() =>
-                      run("Approve", () =>
-                        fetch(`/api/orders/${id}/approve`, { method: "POST" }),
-                      )
-                    }
+                    onClick={async () => {
+                      setBusy("Approve");
+                      setMsg(null);
+                      try {
+                        // If there's a price, redirect to Stripe Checkout.
+                        // Otherwise fall through to the direct approve endpoint.
+                        if ((order.totalPrice ?? 0) > 0) {
+                          const r = await fetch(`/api/orders/${id}/checkout`, {
+                            method: "POST",
+                          });
+                          const d = await r.json();
+                          if (!r.ok) {
+                            setMsg({ ok: false, text: d.error ?? "Failed to start checkout" });
+                            return;
+                          }
+                          window.location.href = d.url;
+                          return;
+                        }
+                        const r = await fetch(`/api/orders/${id}/approve`, { method: "POST" });
+                        const d = await r.json();
+                        if (!r.ok) setMsg({ ok: false, text: d.error ?? "Failed" });
+                        else {
+                          setMsg({ ok: true, text: "Order approved" });
+                          reload();
+                        }
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
                   >
                     <CheckCircle2 className="h-5 w-5 mr-2" />
-                    {busy === "Approve" ? "Processing…" : "Approve & Pay"}
+                    {busy === "Approve"
+                      ? "Redirecting to Stripe…"
+                      : (order.totalPrice ?? 0) > 0
+                      ? `Approve & Pay $${order.totalPrice?.toFixed(2)}`
+                      : "Approve"}
                   </Button>
                 </>
               )}
