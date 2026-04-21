@@ -47,14 +47,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!prisma) return NextResponse.json({ error: "db unavailable" }, { status: 503 });
 
   const body = await req.json();
   const {
-    companyId,
+    companyId: rawCompanyId,
     campaignId,
     description,
     quantity,
@@ -66,9 +64,17 @@ export async function POST(req: NextRequest) {
     totalPrice,
   } = body;
 
-  if (!companyId || !campaignId || !quantity) {
+  // Customers can only create orders for their own company
+  let companyId = rawCompanyId;
+  if (session.role === "CUSTOMER") {
+    companyId = session.companyId;
+  } else if (!companyId) {
+    return NextResponse.json({ error: "companyId required for admin-created orders" }, { status: 400 });
+  }
+
+  if (!campaignId || !quantity) {
     return NextResponse.json(
-      { error: "companyId, campaignId, and quantity are required" },
+      { error: "campaignId and quantity are required" },
       { status: 400 },
     );
   }

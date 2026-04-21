@@ -50,16 +50,22 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!prisma) return NextResponse.json({ error: "db unavailable" }, { status: 503 });
 
   const { id } = await params;
   const body = await req.json();
 
-  const updatable: Record<string, unknown> = {};
-  for (const field of [
+  // Customers can only patch their own company's orders, and only certain fields
+  if (session.role === "CUSTOMER") {
+    const order = await prisma.order.findUnique({ where: { id }, select: { companyId: true } });
+    if (!order || order.companyId !== session.companyId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  }
+
+  // Admins can change everything. Customers can only change list attachment.
+  const adminFields = [
     "description",
     "quantity",
     "dropDate",
@@ -72,7 +78,13 @@ export async function PATCH(
     "packageId",
     "mailingListUrl",
     "mailingListFileName",
-  ]) {
+  ];
+  const customerFields = ["mailingListUrl", "mailingListFileName"];
+  const allowedFields =
+    session.role === "CUSTOMER" ? customerFields : adminFields;
+
+  const updatable: Record<string, unknown> = {};
+  for (const field of allowedFields) {
     if (field in body) {
       if (field === "dropDate" && body[field]) updatable[field] = new Date(body[field]);
       else updatable[field] = body[field];
