@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 interface Order {
   id: string;
@@ -76,16 +78,24 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
-          <Package className="h-5 w-5" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
+            <Package className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Your Orders</h1>
+            <p className="text-sm text-gray-500">
+              Mailings in prep, awaiting approval, or already in the mail
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Your Orders</h1>
-          <p className="text-sm text-gray-500">
-            Mailings in prep, awaiting approval, or already in the mail
-          </p>
-        </div>
+        <Link href="/dashboard/orders/new">
+          <Button className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            New Campaign
+          </Button>
+        </Link>
       </div>
 
       {needsAction.length > 0 && (

@@ -465,6 +465,14 @@ model Order {
   mailingListUrl       String?
   mailingListFileName  String?
   mailingListUploadedAt DateTime?
+  // Row count detected from the uploaded list (used for pricing)
+  mailingListRowCount  Int?
+  // Column mapping: JSON of {ourField: "theirColumnName"}
+  mailingListMapping   Json?
+  // Selected template for auto-merge preview
+  mailerTemplateId     String?
+  // Optional custom per-recipient field ("offer text", etc.) user typed during order creation
+  customOffer          String?
 
   proof        OrderProof?
   approval     OrderApproval?
@@ -538,6 +546,34 @@ model PackageDrawdown {
   drawnAt   DateTime @default(now())
 
   @@index([packageId])
+}
+
+// -------- Mailer Templates — design library for on-the-spot merge previews --------
+// Admins maintain a library of reusable postcard/letter templates. Customers
+// pick one during Order creation; portal merges spreadsheet rows into the
+// template to render a live preview the customer approves on the spot.
+model MailerTemplate {
+  id            String   @id @default(cuid())
+  name          String   // "Beach Real Estate 6x9"
+  category      String   @default("postcard") // postcard, letter, flat
+  size          String   @default("6x9")      // 4x6, 6x9, 6x11, etc.
+  thumbnailUrl  String?                       // preview image (Vercel Blob)
+  // Template content — HTML with {{variableName}} placeholders.
+  // Required variables documented in `variables` string[] below.
+  htmlTemplate  String   @db.Text
+  // Required variable names the user's spreadsheet must provide
+  // (comma-separated, e.g. "firstName,address1,city,state,zip5,offer")
+  variables     String
+  // Default price per piece (can be overridden per-order)
+  pricePerPiece Float    @default(0.85)
+  // Recommended / minimum quantity
+  minQuantity   Int      @default(500)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
 }
 
 // -------- Drop notification log — so we don't send duplicate "landed" emails --------
