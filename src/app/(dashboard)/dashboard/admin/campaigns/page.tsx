@@ -1,35 +1,100 @@
 "use client";
 
-import { Megaphone, Pencil, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { getChannelLabel } from "@/lib/utils";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
+/**
+ * Admin: Campaigns — list real campaigns + create new.
+ */
 
-const campaigns = [
-  { id: 1, name: "Spring Homeowner Mailer", code: "CD-2026-001", company: "C&D Printing Demo Account", status: "Live", channels: ["MAIL_TRACKING", "CALL_TRACKING", "GOOGLE_ADS", "FACEBOOK_ADS", "QR_CODES"] },
-  { id: 2, name: "South Florida Prospecting", code: "CD-2026-002", company: "C&D Printing Demo Account", status: "Live", channels: ["MAIL_TRACKING", "GOOGLE_ADS", "FACEBOOK_ADS", "BEHAVIORAL_ADS", "GMAIL_ADS"] },
-  { id: 3, name: "Investor Lead Gen Q2", code: "CD-2026-003", company: "Sunshine Realty Group", status: "Paused", channels: ["MAIL_TRACKING", "CALL_TRACKING", "GOOGLE_ADS", "YOUTUBE_ADS"] },
-  { id: 4, name: "Geo-Targeted Retargeting Push", code: "CD-2026-004", company: "Sunshine Realty Group", status: "Completed", channels: ["BEHAVIORAL_ADS", "FACEBOOK_ADS", "GMAIL_ADS", "YOUTUBE_ADS"] },
-  { id: 5, name: "Luxury Home Seller Campaign", code: "CD-2026-005", company: "Palm Coast Insurance", status: "Live", channels: ["MAIL_TRACKING", "CALL_TRACKING", "GOOGLE_ADS", "FACEBOOK_ADS", "BEHAVIORAL_ADS", "QR_CODES"] },
-];
+import { useEffect, useState } from "react";
+import { Megaphone, Plus } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+
+interface Campaign {
+  id: string;
+  name: string;
+  campaignCode: string;
+  description: string | null;
+  status: string;
+  createdAt: string;
+  company: { id: string; name: string };
+  _count?: { orders: number; mailPieces: number };
+}
+
+interface Company {
+  id: string;
+  name: string;
+}
 
 const statusColors: Record<string, string> = {
-  Live: "bg-emerald-100 text-emerald-700",
-  Paused: "bg-amber-100 text-amber-700",
-  Completed: "bg-gray-100 text-gray-700",
+  DRAFT: "bg-slate-100 text-slate-700",
+  LIVE: "bg-emerald-100 text-emerald-700",
+  PAUSED: "bg-amber-100 text-amber-700",
+  COMPLETED: "bg-gray-100 text-gray-600",
 };
 
-export default function CampaignsPage() {
+export default function AdminCampaignsPage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    companyId: "",
+    description: "",
+    campaignCode: "",
+    status: "DRAFT",
+  });
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = () => {
+    fetch("/api/campaigns")
+      .then((r) => r.json())
+      .then((d) => setCampaigns(d.campaigns ?? []));
+    fetch("/api/companies")
+      .then((r) => r.json())
+      .then((d) => setCompanies(d.companies ?? []));
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const create = async () => {
+    if (!form.name || !form.companyId) {
+      setErr("Name and customer required");
+      return;
+    }
+    setErr(null);
+    setCreating(true);
+    try {
+      const r = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setErr(data.error ?? "Create failed");
+      } else {
+        setShowForm(false);
+        setForm({
+          name: "",
+          companyId: "",
+          description: "",
+          campaignCode: "",
+          status: "DRAFT",
+        });
+        load();
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
@@ -37,67 +102,140 @@ export default function CampaignsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-            <p className="text-sm text-gray-500">Manage all campaigns across companies</p>
+            <p className="text-sm text-gray-500">Manage campaigns across all customers</p>
           </div>
         </div>
-        <Button className="bg-brand-600 hover:bg-brand-700 text-white">
+        <Button onClick={() => setShowForm(!showForm)}>
+          <Plus className="h-4 w-4 mr-1" />
           Create Campaign
         </Button>
       </div>
 
-      {/* Campaigns Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Channels</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {campaigns.map((campaign) => (
-              <TableRow key={campaign.id}>
-                <TableCell className="font-medium">{campaign.name}</TableCell>
-                <TableCell className="text-gray-500 font-mono text-xs">{campaign.code}</TableCell>
-                <TableCell>{campaign.company}</TableCell>
-                <TableCell>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[campaign.status] || "bg-gray-100 text-gray-700"}`}>
-                    {campaign.status}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {campaign.channels.map((ch) => (
-                      <span
-                        key={ch}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700"
-                      >
-                        {getChannelLabel(ch)}
-                      </span>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
-                      <Eye className="h-3.5 w-3.5" />
-                      View
-                    </Button>
-                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New Campaign</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Customer *</label>
+                <select
+                  className="w-full h-9 rounded-md border border-gray-300 px-3 text-sm"
+                  value={form.companyId}
+                  onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+                >
+                  <option value="">Select customer…</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Campaign Name *</label>
+                <Input
+                  placeholder="Spring Homeowner Mailer"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">
+                  Campaign Code (auto-generated if blank)
+                </label>
+                <Input
+                  placeholder="CD-2026-006"
+                  value={form.campaignCode}
+                  onChange={(e) => setForm({ ...form, campaignCode: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Initial Status</label>
+                <select
+                  className="w-full h-9 rounded-md border border-gray-300 px-3 text-sm"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  <option>DRAFT</option>
+                  <option>LIVE</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-600 mb-1 block">Description</label>
+                <Input
+                  placeholder="Q2 real estate prospecting to owner-occupants in Volusia County"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+            </div>
+            {err && (
+              <div className="rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-900">
+                {err}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={create} disabled={creating}>
+                {creating ? "Creating…" : "Create Campaign"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-gray-500 border-b bg-gray-50">
+              <tr>
+                <th className="px-4 py-3">Campaign</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th className="text-right">Orders</th>
+                <th className="text-right">Pieces</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-gray-400">
+                    No campaigns yet. Click &ldquo;Create Campaign&rdquo; above to add the first one.
+                  </td>
+                </tr>
+              )}
+              {campaigns.map((c) => (
+                <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{c.name}</div>
+                    <div className="text-xs text-gray-500 font-mono mt-0.5">
+                      {c.campaignCode}
+                    </div>
+                  </td>
+                  <td>{c.company?.name ?? "—"}</td>
+                  <td>
+                    <Badge className={statusColors[c.status] ?? "bg-gray-100 text-gray-600"}>
+                      {c.status}
+                    </Badge>
+                  </td>
+                  <td className="text-right">{c._count?.orders ?? 0}</td>
+                  <td className="text-right">
+                    {(c._count?.mailPieces ?? 0).toLocaleString()}
+                  </td>
+                  <td className="text-xs text-gray-500">
+                    {new Date(c.createdAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -25,12 +25,14 @@ const roleLabel: Record<string, string> = {
   CUSTOMER: "Client",
 };
 
-const demoUsers = [
-  { name: "Sarah Johnson", email: "admin@cndprinting.com", role: "ADMIN", company: "C&D Printing Demo Account", status: "Active" },
-  { name: "Mike Chen", email: "manager@cndprinting.com", role: "ACCOUNT_MANAGER", company: "C&D Printing Demo Account", status: "Active" },
-  { name: "John Rivera", email: "john@sunshinerealty.com", role: "CUSTOMER", company: "Sunshine Realty Group", status: "Active" },
-  { name: "Lisa Martinez", email: "lisa@palmcoastins.com", role: "CUSTOMER", company: "Palm Coast Insurance", status: "Active" },
-];
+interface DbUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  company: { id: string; name: string } | null;
+}
 
 export default function AdminUsersPage() {
   const [showInviteModal, setShowInviteModal] = React.useState(false);
@@ -40,6 +42,16 @@ export default function AdminUsersPage() {
   const [inviteLoading, setInviteLoading] = React.useState(false);
   const [inviteError, setInviteError] = React.useState("");
   const [copied, setCopied] = React.useState(false);
+  const [users, setUsers] = React.useState<DbUser[]>([]);
+
+  const loadUsers = () =>
+    fetch("/api/users")
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []));
+
+  React.useEffect(() => {
+    loadUsers();
+  }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,30 +125,33 @@ export default function AdminUsersPage() {
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Company</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead>Added</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {demoUsers.map((user, i) => (
-              <TableRow key={i}>
-                <TableCell className="font-medium">{user.name}</TableCell>
-                <TableCell className="text-gray-500">{user.email}</TableCell>
-                <TableCell>
-                  <Badge className={roleBadge[user.role]}>{roleLabel[user.role]}</Badge>
-                </TableCell>
-                <TableCell className="text-gray-500">{user.company}</TableCell>
-                <TableCell>
-                  <Badge variant="success">Active</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm">View</Button>
-                    <Button variant="ghost" size="sm">Edit</Button>
-                  </div>
+            {users.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-gray-400 py-8">
+                  No users yet. Click &ldquo;Invite User&rdquo; to add one.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">{user.name}</TableCell>
+                  <TableCell className="text-gray-500">{user.email}</TableCell>
+                  <TableCell>
+                    <Badge className={roleBadge[user.role] ?? "bg-gray-100 text-gray-700"}>
+                      {roleLabel[user.role] ?? user.role}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-gray-500">{user.company?.name ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-gray-500">
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>

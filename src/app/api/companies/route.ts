@@ -66,3 +66,39 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ companies });
 }
+
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!prisma) return NextResponse.json({ error: "db unavailable" }, { status: 503 });
+
+  const body = await req.json();
+  const { name, industry, website, address, phone } = body;
+  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
+
+  let baseSlug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  if (!baseSlug) baseSlug = "customer";
+
+  // Ensure unique slug
+  let slug = baseSlug;
+  let n = 1;
+  while (await prisma.company.findUnique({ where: { slug } })) {
+    n++;
+    slug = `${baseSlug}-${n}`;
+  }
+
+  try {
+    const company = await prisma.company.create({
+      data: { name, slug, industry, website, address, phone },
+    });
+    return NextResponse.json(company, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
