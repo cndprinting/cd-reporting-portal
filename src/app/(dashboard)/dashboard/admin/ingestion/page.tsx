@@ -71,10 +71,38 @@ export default function IngestionMonitoringPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setLoading(true);
+              try {
+                const r = await fetch("/api/iv-mtr/pull");
+                const d = await r.json();
+                if (r.ok) {
+                  alert(
+                    `Pull complete\n\nReceived: ${d.received ?? 0}\nInserted: ${d.inserted ?? 0}\nSkipped: ${d.skipped ?? 0}\nErrors: ${d.errors?.length ?? 0}\n\n${(d.queryErrors?.length ? "Query errors: " + d.queryErrors.join("; ") : "All queries OK")}`,
+                  );
+                } else {
+                  alert(`Pull failed: ${d.error ?? "unknown"}\n${d.details ? JSON.stringify(d.details) : ""}`);
+                }
+              } catch (e) {
+                alert(`Pull error: ${(e as Error).message}`);
+              } finally {
+                setLoading(false);
+                load();
+              }
+            }}
+            disabled={loading}
+            className="bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100"
+          >
+            ▶ Run Pull Now
+          </Button>
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Feed health banner */}

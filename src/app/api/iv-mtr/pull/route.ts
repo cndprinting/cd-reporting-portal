@@ -18,9 +18,17 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
-  // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  // Vercel cron sends Authorization: Bearer <CRON_SECRET>.
+  // Admins can also trigger manually from /dashboard/admin/ingestion.
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const isCron = auth === `Bearer ${process.env.CRON_SECRET}`;
+  let isAdmin = false;
+  if (!isCron) {
+    const { getSession } = await import("@/lib/session");
+    const session = await getSession();
+    isAdmin = !!session && (session.role === "ADMIN" || session.role === "ACCOUNT_MANAGER");
+  }
+  if (!isCron && !isAdmin) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
