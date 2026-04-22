@@ -54,6 +54,10 @@ export default function AdminCompaniesPage() {
       setErr("Name required");
       return;
     }
+    if (companies.some((c) => c.name === form.name)) {
+      setErr(`"${form.name}" already exists. Pick "— Add a new customer —" above to create a different one.`);
+      return;
+    }
     setErr(null);
     setCreating(true);
     try {
@@ -102,18 +106,64 @@ export default function AdminCompaniesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="text-xs text-gray-600 mb-1 block">Company Name *</label>
-                <Input
-                  placeholder="Aaron Waxman Real Estate"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  list="existing-customers"
-                />
-                <datalist id="existing-customers">
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.name} />
-                  ))}
-                </datalist>
+                <select
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm bg-white"
+                  value={
+                    companies.some((c) => c.name === form.name) ? form.name : "__NEW__"
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === "__NEW__") {
+                      setForm({ ...form, name: "" });
+                    } else {
+                      // Picked an existing company — populate the name so admin
+                      // can see the dupe warning and decide whether to cancel.
+                      setForm({ ...form, name: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="__NEW__">— Add a new customer —</option>
+                  {companies
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                        {c.industry ? ` — ${c.industry}` : ""}
+                      </option>
+                    ))}
+                </select>
+
+                {/* Name input — hidden when an existing company is selected */}
+                {!companies.some((c) => c.name === form.name) && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Type the new customer's name, e.g. Aaron Waxman Real Estate"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    autoFocus
+                  />
+                )}
+
+                {/* Fuzzy-match warning */}
                 {(() => {
+                  if (companies.some((c) => c.name === form.name)) {
+                    return (
+                      <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                          <div>
+                            <div className="font-medium">
+                              &ldquo;{form.name}&rdquo; already exists as a customer.
+                            </div>
+                            <div className="mt-0.5">
+                              Pick &ldquo;— Add a new customer —&rdquo; above to create a
+                              different one, or cancel and edit the existing record.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                   const matches = companies.filter((c) => fuzzyMatches(form.name, c.name));
                   if (matches.length === 0) return null;
                   return (
@@ -137,7 +187,7 @@ export default function AdminCompaniesPage() {
                             ))}
                           </ul>
                           <div className="mt-1.5 text-amber-700/80">
-                            Make sure this is a genuinely new company before clicking Create.
+                            Make sure this is genuinely new before clicking Create.
                           </div>
                         </div>
                       </div>
