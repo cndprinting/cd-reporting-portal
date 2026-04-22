@@ -46,6 +46,16 @@ interface OrderDetail {
   mailingListUrl: string | null;
   mailingListFileName: string | null;
   mailingListUploadedAt: string | null;
+  // Final quantity reconciliation (after AccuZIP cleansing)
+  finalQuantity: number | null;
+  finalTotalPrice: number | null;
+  quantityAdjustedAt: string | null;
+  cleansedListUrl: string | null;
+  cleansedListFileName: string | null;
+  cleansedListUploadedAt: string | null;
+  cleansedListRowCount: number | null;
+  stripeRefundId: string | null;
+  stripeRefundAmount: number | null;
   company: {
     id: string;
     name: string;
@@ -326,6 +336,10 @@ export default function OrderDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Final Quantity Reconciliation — visible to both admin + customer
+          (admin can adjust, customer sees the result) */}
+      <FinalQuantityCard order={order} isAdmin={isAdmin} orderId={id!} onUpdate={reload} />
 
       {/* Order details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -830,5 +844,345 @@ function MailingListUploader({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Final Quantity card — shown on every order.
+ *   Admin: enter adjusted count + optionally upload the cleansed list.
+ *          System recomputes price and fires Stripe partial refund if already paid.
+ *   Customer: read-only — shows original → final, refund (if any), cleansed list download.
+ */
+function FinalQuantityCard({
+  order,
+  isAdmin,
+  orderId,
+  onUpdate,
+}: {
+  order: OrderDetail;
+  isAdmin: boolean;
+  orderId: string;
+  onUpdate: () => void;
+}) {
+  const [finalQty, setFinalQty] = useState<string>(
+    order.finalQuantity?.toString() ?? "",
+  );
+  const [uploading, setUploading] = useState(false);
+  const [cleansedUrl, setCleansedUrl] = useState<string | null>(order.cleansedListUrl);
+  const [cleansedName, setCleansedName] = useState<string | null>(order.cleansedListFileName);
+  const [cleansedRows, setCleansedRows] = useState<number | null>(order.cleansedListRowCount);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const previewQty = finalQty ? parseInt(finalQty, 10) : null;
+  const pricePerPiece = order.pricePerPiece ?? 0;
+  const setupFee = order.setupFee ?? 0;
+  const previewTotal =
+    previewQty !== null && Number.isFinite(previewQty)
+      ? +(previewQty * pricePerPiece + setupFee).toFixed(2)
+      : null;
+  const originalTotal = order.totalPrice ?? 0;
+  const previewRefund =
+    previewTotal !== null && order.paidAt ? Math.max(0, +(originalTotal - previewTotal).toFixed(2)) : 0;
+
+  const hasAdjustment = order.finalQuantity != null && !!order.quantityAdjustedAt;
+  const removedPieces = hasAdjustment ? order.quantity - (order.finalQuantity ?? 0) : 0;
+  const removedPct = hasAdjustment && order.quantity > 0 ? (removedPieces / order.quantity) * 100 : 0;
+
+  const uploadCleansedList = async (file: File) => {
+    setUploading(true);
+    setErr(null);
+    try {
+      const upRes = await fetch(
+        `/api/uploads?filename=${encodeURIComponent(file.name)}&kind=cleansed-list`,
+        { method: "POST", body: file },
+      );
+      const upData = await upRes.json();
+      if (!upRes.ok) throw new Error(upData.error ?? "Upload failed");
+      setCleansedUrl(upData.url);
+      setCleansedName(file.name);
+      try {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        const rowsNoHeader = Math.max(0, lines.length - 1);
+        setCleansedRows(rowsNoHeader);
+        if (!finalQty) setFinalQty(String(rowsNoHeader));
+      } catch {
+        /* non-CSV, skip row count */
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const save = async () => {
+    if (!finalQty) {
+      setErr("Enter a final quantity");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/adjust-quantity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finalQuantity: parseInt(finalQty, 10),
+          cleansedListUrl: cleansedUrl,
+          cleansedListFileName: cleansedName,
+          cleansedListRowCount: cleansedRows,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setErr(d.error ?? "Failed to apply adjustment");
+        return;
+      }
+      setMsg(
+        d.refundAmount
+          ? `Adjustment applied — $${d.refundAmount.toFixed(2)} refunded to customer card.`
+          : "Adjustment applied.",
+      );
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isAdmin && !hasAdjustment) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileCheck className="h-4 w-4" />
+          Final Quantity{" "}
+          {hasAdjustment && <Badge className="ml-2 bg-emerald-100 text-emerald-700">Adjusted</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {hasAdjustment ? (
+          <>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-lg bg-gray-50 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">Original</div>
+                <div className="text-xl font-bold text-gray-700 mt-1">
+                  {order.quantity.toLocaleString()}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">${originalTotal.toFixed(2)}</div>
+              </div>
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-emerald-700">Final</div>
+                <div className="text-xl font-bold text-emerald-700 mt-1">
+                  {order.finalQuantity?.toLocaleString() ?? "—"}
+                </div>
+                <div className="text-xs text-emerald-700 mt-0.5">
+                  ${order.finalTotalPrice?.toFixed(2) ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-lg bg-sky-50 border border-sky-200 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-sky-700">
+                  {order.stripeRefundAmount ? "Refunded" : "Removed"}
+                </div>
+                <div className="text-xl font-bold text-sky-700 mt-1">
+                  {order.stripeRefundAmount
+                    ? `$${order.stripeRefundAmount.toFixed(2)}`
+                    : removedPieces.toLocaleString()}
+                </div>
+                <div className="text-xs text-sky-700 mt-0.5">{removedPct.toFixed(1)}% cleansed</div>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-600 bg-gray-50 rounded-md p-3 leading-relaxed">
+              Mailing list was processed through USPS CASS certification and NCOA validation.
+              Duplicate, undeliverable, and forwarded addresses were removed.
+              {order.stripeRefundAmount
+                ? ` The customer was automatically refunded $${order.stripeRefundAmount.toFixed(2)} for the removed pieces.`
+                : " The customer's charge will reflect only the validated count."}
+              {order.quantityAdjustedAt && (
+                <>
+                  {" "}
+                  <span className="text-gray-400">
+                    Adjusted {new Date(order.quantityAdjustedAt).toLocaleString()}.
+                  </span>
+                </>
+              )}
+            </div>
+
+            {order.cleansedListUrl && (
+              <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileSpreadsheet className="h-6 w-6 text-sky-600 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {order.cleansedListFileName ?? "Cleansed list"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {order.cleansedListRowCount?.toLocaleString() ?? "—"} rows · uploaded{" "}
+                      {order.cleansedListUploadedAt
+                        ? new Date(order.cleansedListUploadedAt).toLocaleDateString()
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={order.cleansedListUrl}
+                  download
+                  className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline font-medium"
+                >
+                  <Download className="h-3 w-3" /> Download
+                </a>
+              </div>
+            )}
+
+            {isAdmin && (
+              <div className="pt-2 border-t text-xs text-gray-500">
+                Need to re-adjust? Update the Final Quantity below.
+                <div className="mt-2 flex gap-2 items-end">
+                  <div>
+                    <label className="block text-[10px] text-gray-500 mb-1">
+                      New Final Quantity
+                    </label>
+                    <Input
+                      type="number"
+                      className="w-32"
+                      value={finalQty}
+                      onChange={(e) => setFinalQty(e.target.value)}
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={save} disabled={saving}>
+                    {saving ? "Saving…" : "Update"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="text-xs text-gray-600 leading-relaxed">
+              Enter the AccuZIP-validated count (after CASS / NCOA / dedupe). The price will
+              automatically recalculate
+              {order.paidAt
+                ? " and Stripe will refund the difference to the customer's card"
+                : ""}
+              . You can also upload the cleansed list so the customer can see what&rsquo;s
+              actually mailing.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Original Quantity
+                </label>
+                <div className="h-10 rounded-md border border-gray-200 bg-gray-50 flex items-center px-3 text-sm text-gray-600">
+                  {order.quantity.toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Final Quantity *
+                </label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 4732"
+                  value={finalQty}
+                  onChange={(e) => setFinalQty(e.target.value)}
+                  max={order.quantity}
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">New Total</label>
+                <div className="h-10 rounded-md border border-gray-200 bg-emerald-50 text-emerald-900 flex items-center px-3 text-sm font-semibold">
+                  {previewTotal !== null ? `$${previewTotal.toFixed(2)}` : "—"}
+                </div>
+              </div>
+            </div>
+
+            {previewRefund > 0 && (
+              <div className="rounded-md bg-sky-50 border border-sky-200 p-3 text-xs text-sky-900">
+                <strong>Refund preview:</strong> ${previewRefund.toFixed(2)} will be refunded to
+                the customer&rsquo;s Stripe card.
+              </div>
+            )}
+
+            {cleansedUrl ? (
+              <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileSpreadsheet className="h-6 w-6 text-sky-600 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{cleansedName}</div>
+                    <div className="text-xs text-gray-500">
+                      {cleansedRows?.toLocaleString() ?? "—"} rows
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCleansedUrl(null);
+                    setCleansedName(null);
+                    setCleansedRows(null);
+                  }}
+                >
+                  Replace
+                </Button>
+              </div>
+            ) : (
+              <label
+                className={`block rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${
+                  uploading
+                    ? "border-gray-300 bg-gray-50"
+                    : "border-gray-300 hover:border-sky-400 hover:bg-sky-50"
+                }`}
+              >
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".csv,.xlsx,.txt"
+                  disabled={uploading}
+                  onChange={(e) => e.target.files?.[0] && uploadCleansedList(e.target.files[0])}
+                />
+                <Upload className="h-6 w-6 text-sky-500 mx-auto mb-1" />
+                <div className="text-sm font-medium text-gray-700">
+                  {uploading ? "Uploading…" : "Upload cleansed list (optional)"}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  AccuZIP output · CSV / XLSX / TXT · row count auto-populates
+                </div>
+              </label>
+            )}
+
+            {err && (
+              <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
+                {err}
+              </div>
+            )}
+            {msg && (
+              <div className="rounded-md bg-emerald-50 border border-emerald-200 p-2 text-xs text-emerald-900">
+                {msg}
+              </div>
+            )}
+
+            <Button
+              onClick={save}
+              disabled={saving || !finalQty}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+            >
+              {saving
+                ? "Applying adjustment…"
+                : previewRefund > 0
+                ? `Apply Adjustment & Refund $${previewRefund.toFixed(2)}`
+                : "Apply Adjustment"}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -474,6 +474,24 @@ model Order {
   // Optional custom per-recipient field ("offer text", etc.) user typed during order creation
   customOffer          String?
 
+  // ── Final Quantity Reconciliation ────────────────────────────────────
+  // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is
+  // usually smaller than what the customer uploaded. We adjust quantity
+  // downward and partially refund the customer accordingly, so they only
+  // pay for pieces that actually drop.
+  finalQuantity          Int?      // validated count after AccuZIP cleansing
+  finalTotalPrice        Float?    // recalculated total at finalQuantity * pricePerPiece + setupFee
+  quantityAdjustedAt     DateTime?
+  quantityAdjustedBy     String?   // admin user id who applied the adjustment
+  // Cleansed recipient list — what actually mails (output of AccuZIP/CASS)
+  cleansedListUrl        String?
+  cleansedListFileName   String?
+  cleansedListUploadedAt DateTime?
+  cleansedListRowCount   Int?
+  // Stripe partial refund (if adjustment happens after payment captured)
+  stripeRefundId         String?
+  stripeRefundAmount     Float?
+
   proof        OrderProof?
   approval     OrderApproval?
   drawdowns    PackageDrawdown[]
