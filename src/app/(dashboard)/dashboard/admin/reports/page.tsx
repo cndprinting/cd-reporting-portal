@@ -8,6 +8,7 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  FlaskConical,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,15 @@ export default function ScheduledReportsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [myEmail, setMyEmail] = useState<string>("");
   const [sentBanner, setSentBanner] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => setMyEmail(d?.user?.email ?? ""));
+  }, []);
 
   const load = () => {
     fetch("/api/companies?include=reportSettings")
@@ -70,10 +79,15 @@ export default function ScheduledReportsPage() {
   };
 
   const sendNow = async (c: Company) => {
+    if (!confirm(`Send the weekly report to ${c.name}'s actual recipients right now?`)) return;
     setSendingId(c.id);
     setSentBanner(null);
     try {
-      const resp = await fetch(`/api/reports/weekly/${c.id}`, { method: "POST" });
+      const resp = await fetch(`/api/reports/weekly/${c.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
       const data = await resp.json();
       if (data.ok) {
         setSentBanner({ ok: true, msg: `Sent to ${data.recipients.join(", ")}` });
@@ -83,6 +97,33 @@ export default function ScheduledReportsPage() {
       }
     } finally {
       setSendingId(null);
+    }
+  };
+
+  const testSendToMe = async (c: Company) => {
+    if (!myEmail) {
+      setSentBanner({ ok: false, msg: "Couldn't detect your email" });
+      return;
+    }
+    setTestingId(c.id);
+    setSentBanner(null);
+    try {
+      const resp = await fetch(`/api/reports/weekly/${c.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients: [myEmail] }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        setSentBanner({
+          ok: true,
+          msg: `Test report for ${c.name} sent to ${myEmail}`,
+        });
+      } else {
+        setSentBanner({ ok: false, msg: data.error ?? "Send failed" });
+      }
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -177,6 +218,17 @@ export default function ScheduledReportsPage() {
                         onClick={() => setPreviewId(c.id)}
                       >
                         <Eye className="h-3 w-3 mr-1" /> Preview
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-amber-700 border-amber-200 hover:bg-amber-50"
+                        onClick={() => testSendToMe(c)}
+                        disabled={testingId === c.id || !myEmail}
+                        title={myEmail ? `Send test to ${myEmail}` : "Loading your email…"}
+                      >
+                        <FlaskConical className="h-3 w-3 mr-1" />
+                        {testingId === c.id ? "Sending…" : "Test to Me"}
                       </Button>
                       <Button
                         size="sm"
