@@ -28,7 +28,7 @@ const primaryNav: NavLink[] = [
   { label: "Dashboard", href: "/dashboard/overview", icon: LayoutDashboard },
   { label: "Orders", href: "/dashboard/orders", icon: Package },
   { label: "Packages", href: "/dashboard/packages", icon: Layers },
-  { label: "Direct Mail", href: "/dashboard/mail", icon: Mail },
+  { label: "Mail Tracking", href: "/dashboard/mail", icon: Mail },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { label: "Billing", href: "/dashboard/billing", icon: CreditCard },
 ];
@@ -45,6 +45,7 @@ const adminNav: NavLink[] = [
   { label: "API Keys", href: "/dashboard/admin/mailers" },
   { label: "Mail Import (manual)", href: "/dashboard/admin/mail-import" },
   { label: "USPS Feed Monitor", href: "/dashboard/admin/ingestion" },
+  { label: "Demo Tools", href: "/dashboard/admin/demo-tools" },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports" },
   { label: "Branding", href: "/dashboard/admin/branding" },
   { label: "Settings", href: "/dashboard/settings" },

@@ -167,6 +167,14 @@ export async function ingestIVFile(input: {
     await rollupMailPieceStatus(id).catch((e) => errors.push(`rollup ${id}: ${e.message}`));
   }
 
+  // Roll affected campaigns up to their Orders: DROPPED → DELIVERING → COMPLETE
+  const affectedCampaignIds = [...new Set(pieces.map((p) => p.campaignId))];
+  for (const campaignId of affectedCampaignIds) {
+    await rollupOrdersForCampaign(campaignId).catch((e) =>
+      errors.push(`order rollup ${campaignId}: ${e.message}`),
+    );
+  }
+
   await prisma.iVFeedIngestion.update({
     where: { id: ingestion.id },
     data: {
@@ -179,6 +187,46 @@ export async function ingestIVFile(input: {
   });
 
   return { ingestionId: ingestion.id, received: records.length, inserted, skipped, unknownImbs, errors };
+}
+
+/**
+ * For every Order on this campaign that's been DROPPED/DELIVERING,
+ * roll its piece-level delivery data up into the Order.status:
+ *   DROPPED      = no pieces delivered yet
+ *   DELIVERING   = some pieces delivered
+ *   COMPLETE     = ≥ 80% of pieces delivered (or all scanned at least once)
+ */
+export async function rollupOrdersForCampaign(campaignId: string) {
+  if (!prisma) throw new Error("Database not initialized");
+  const orders = await prisma.order.findMany({
+    where: {
+      campaignId,
+      status: { in: ["DROPPED", "DELIVERING"] },
+    },
+    select: { id: true, status: true, quantity: true },
+  });
+  for (const order of orders) {
+    // Count delivered pieces on this campaign (we don't yet link piece→order
+    // directly, so approximate by campaign; good enough for single-order-per-
+    // campaign and surfaces progress for recurring campaigns too).
+    const totalPieces = await prisma.mailPiece.count({ where: { campaignId } });
+    if (totalPieces === 0) continue;
+    const delivered = await prisma.mailPiece.count({
+      where: {
+        campaignId,
+        status: { in: ["DELIVERED", "DELIVERED_INFERRED"] },
+      },
+    });
+    const pct = delivered / totalPieces;
+    let next: "DROPPED" | "DELIVERING" | "COMPLETE" = order.status as
+      | "DROPPED"
+      | "DELIVERING";
+    if (pct >= 0.8) next = "COMPLETE";
+    else if (delivered > 0) next = "DELIVERING";
+    if (next !== order.status) {
+      await prisma.order.update({ where: { id: order.id }, data: { status: next } });
+    }
+  }
 }
 
 /** Recompute a MailPiece's status/timestamps from its ScanEvents. */
