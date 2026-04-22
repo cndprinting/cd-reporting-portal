@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Building2, Plus, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,96 +104,13 @@ export default function AdminCompaniesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+              <div>
                 <label className="text-xs text-gray-600 mb-1 block">Company Name *</label>
-                <select
-                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm bg-white"
-                  value={
-                    companies.some((c) => c.name === form.name) ? form.name : "__NEW__"
-                  }
-                  onChange={(e) => {
-                    if (e.target.value === "__NEW__") {
-                      setForm({ ...form, name: "" });
-                    } else {
-                      // Picked an existing company — populate the name so admin
-                      // can see the dupe warning and decide whether to cancel.
-                      setForm({ ...form, name: e.target.value });
-                    }
-                  }}
-                >
-                  <option value="__NEW__">— Add a new customer —</option>
-                  {companies
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                        {c.industry ? ` — ${c.industry}` : ""}
-                      </option>
-                    ))}
-                </select>
-
-                {/* Name input — hidden when an existing company is selected */}
-                {!companies.some((c) => c.name === form.name) && (
-                  <Input
-                    className="mt-2"
-                    placeholder="Type the new customer's name, e.g. Aaron Waxman Real Estate"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    autoFocus
-                  />
-                )}
-
-                {/* Fuzzy-match warning */}
-                {(() => {
-                  if (companies.some((c) => c.name === form.name)) {
-                    return (
-                      <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
-                          <div>
-                            <div className="font-medium">
-                              &ldquo;{form.name}&rdquo; already exists as a customer.
-                            </div>
-                            <div className="mt-0.5">
-                              Pick &ldquo;— Add a new customer —&rdquo; above to create a
-                              different one, or cancel and edit the existing record.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                  const matches = companies.filter((c) => fuzzyMatches(form.name, c.name));
-                  if (matches.length === 0) return null;
-                  return (
-                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                        <div className="flex-1">
-                          <div className="font-medium">
-                            {matches.length === 1
-                              ? "A similar customer already exists:"
-                              : `${matches.length} similar customers already exist:`}
-                          </div>
-                          <ul className="mt-1 space-y-0.5">
-                            {matches.slice(0, 5).map((m) => (
-                              <li key={m.id} className="flex items-center justify-between gap-2">
-                                <span className="font-mono">{m.name}</span>
-                                {m.industry && (
-                                  <span className="text-amber-700/70">{m.industry}</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="mt-1.5 text-amber-700/80">
-                            Make sure this is genuinely new before clicking Create.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+                <CompanyNameCombobox
+                  value={form.name}
+                  onChange={(v) => setForm({ ...form, name: v })}
+                  companies={companies}
+                />
               </div>
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Industry</label>
@@ -322,6 +239,91 @@ export default function AdminCompaniesPage() {
           </table>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Autocomplete input: you type a name, a panel drops below showing existing
+ * customers that match. Click one to fill the input (which then shows a red
+ * warning + blocks the Create button upstream). Keep typing past any matches
+ * and you're creating a new customer.
+ */
+function CompanyNameCombobox({
+  value,
+  onChange,
+  companies,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  companies: Company[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const exact = companies.find((c) => c.name.toLowerCase() === value.toLowerCase());
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    const sorted = companies.slice().sort((a, b) => a.name.localeCompare(b.name));
+    if (!q) return sorted.slice(0, 50);
+    return sorted.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 50);
+  }, [companies, value]);
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <Input
+        placeholder="Start typing — matches show below"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 border-b bg-gray-50">
+            {value.trim()
+              ? `${filtered.length} existing customer${filtered.length === 1 ? "" : "s"} match`
+              : `${filtered.length} existing customers`}
+          </div>
+          {filtered.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                onChange(c.name);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 flex items-center justify-between gap-3 border-b last:border-0"
+            >
+              <span className="font-medium text-gray-900">{c.name}</span>
+              {c.industry && (
+                <span className="text-xs text-gray-500 shrink-0">{c.industry}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {exact && (
+        <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+          <div>
+            <span className="font-medium">&ldquo;{value}&rdquo; already exists.</span> Pick
+            a different name or cancel and edit the existing record.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
