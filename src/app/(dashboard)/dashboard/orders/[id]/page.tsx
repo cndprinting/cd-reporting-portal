@@ -53,6 +53,7 @@ interface OrderDetail {
     stripeCustomerId: string | null;
   };
   campaign: { id: string; name: string; campaignCode: string };
+  package: { id: string; name: string; totalPieces: number; usedPieces: number } | null;
   proof: {
     pdfUrl: string;
     fileName: string | null;
@@ -471,27 +472,59 @@ export default function OrderDetailPage() {
                       setBusy("Approve");
                       setMsg(null);
                       try {
-                        // If there's a price, redirect to Stripe Checkout.
-                        // Otherwise fall through to the direct approve endpoint.
-                        if ((order.totalPrice ?? 0) > 0) {
-                          const r = await fetch(`/api/orders/${id}/checkout`, {
+                        const hasPrice = (order.totalPrice ?? 0) > 0;
+                        const drawsFromPackage = !!order.package;
+
+                        // If drawing from package, skip Stripe entirely
+                        if (drawsFromPackage || !hasPrice) {
+                          const r = await fetch(`/api/orders/${id}/approve`, {
                             method: "POST",
                           });
                           const d = await r.json();
-                          if (!r.ok) {
-                            setMsg({ ok: false, text: d.error ?? "Failed to start checkout" });
-                            return;
+                          if (!r.ok) setMsg({ ok: false, text: d.error ?? "Failed" });
+                          else {
+                            setMsg({ ok: true, text: "Order approved" });
+                            reload();
                           }
-                          window.location.href = d.url;
                           return;
                         }
-                        const r = await fetch(`/api/orders/${id}/approve`, { method: "POST" });
-                        const d = await r.json();
-                        if (!r.ok) setMsg({ ok: false, text: d.error ?? "Failed" });
-                        else {
-                          setMsg({ ok: true, text: "Order approved" });
-                          reload();
+
+                        // Has price — try card on file first; fall back to Checkout
+                        if (order.company.stripeCustomerId) {
+                          const r = await fetch(`/api/orders/${id}/approve`, {
+                            method: "POST",
+                          });
+                          const d = await r.json();
+                          if (r.ok) {
+                            setMsg({
+                              ok: true,
+                              text: d.paymentCaptured
+                                ? "Card charged — order approved"
+                                : "Order approved",
+                            });
+                            reload();
+                            return;
+                          }
+                          // If card charge failed, fall through to Checkout
+                          console.warn(
+                            "[approve] card-on-file charge failed, falling back to Checkout:",
+                            d.error,
+                          );
                         }
+
+                        // No card on file — redirect to Stripe Checkout
+                        const co = await fetch(`/api/orders/${id}/checkout`, {
+                          method: "POST",
+                        });
+                        const coData = await co.json();
+                        if (!co.ok) {
+                          setMsg({
+                            ok: false,
+                            text: coData.error ?? "Failed to start checkout",
+                          });
+                          return;
+                        }
+                        window.location.href = coData.url;
                       } finally {
                         setBusy(null);
                       }
@@ -499,9 +532,13 @@ export default function OrderDetailPage() {
                   >
                     <CheckCircle2 className="h-5 w-5 mr-2" />
                     {busy === "Approve"
-                      ? "Redirecting to Stripe…"
+                      ? "Processing…"
+                      : order.package
+                      ? `Approve (draw from package)`
                       : (order.totalPrice ?? 0) > 0
-                      ? `Approve & Pay $${order.totalPrice?.toFixed(2)}`
+                      ? order.company.stripeCustomerId
+                        ? `Approve & Charge $${order.totalPrice?.toFixed(2)}`
+                        : `Approve & Pay $${order.totalPrice?.toFixed(2)}`
                       : "Approve"}
                   </Button>
                 </>

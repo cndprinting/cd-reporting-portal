@@ -17,6 +17,7 @@ import {
   Palette,
   Package,
   Layers,
+  CreditCard,
 } from "lucide-react";
 
 /**
@@ -29,6 +30,7 @@ const primaryNav: NavLink[] = [
   { label: "Packages", href: "/dashboard/packages", icon: Layers },
   { label: "Direct Mail", href: "/dashboard/mail", icon: Mail },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
+  { label: "Billing", href: "/dashboard/billing", icon: CreditCard },
 ];
 
 // Admin-only navigation. Items that were pure placeholder (Digital Ads,
