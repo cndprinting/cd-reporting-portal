@@ -40,6 +40,7 @@
     "date-fns": "^4.1.0",
     "jose": "^6.2.2",
     "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
     "next-auth": "^5.0.0-beta.30",
@@ -48,12 +49,15 @@
     "prisma": "^7.6.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-leaflet": "^5.0.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zipcodes": "^8.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

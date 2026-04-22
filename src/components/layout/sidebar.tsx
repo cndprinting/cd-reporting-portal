@@ -46,6 +46,7 @@ const adminNav: NavLink[] = [
   { label: "Mail Import (manual)", href: "/dashboard/admin/mail-import" },
   { label: "USPS Feed Monitor", href: "/dashboard/admin/ingestion" },
   { label: "Unknown IMbs", href: "/dashboard/admin/unknown-imbs" },
+  { label: "Scan Map", href: "/dashboard/admin/scan-map" },
   { label: "Demo Tools", href: "/dashboard/admin/demo-tools" },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports" },
   { label: "Branding", href: "/dashboard/admin/branding" },
