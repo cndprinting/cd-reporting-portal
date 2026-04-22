@@ -38,19 +38,34 @@ export default function AdminUsersPage() {
   const [showInviteModal, setShowInviteModal] = React.useState(false);
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteRole, setInviteRole] = React.useState("CUSTOMER");
+  const [inviteCompanyId, setInviteCompanyId] = React.useState("");
   const [inviteUrl, setInviteUrl] = React.useState("");
   const [inviteLoading, setInviteLoading] = React.useState(false);
   const [inviteError, setInviteError] = React.useState("");
   const [copied, setCopied] = React.useState(false);
   const [users, setUsers] = React.useState<DbUser[]>([]);
+  const [companies, setCompanies] = React.useState<{ id: string; name: string }[]>([]);
 
   const loadUsers = () =>
     fetch("/api/users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []));
 
+  const loadCompanies = () =>
+    fetch("/api/companies")
+      .then((r) => r.json())
+      .then((d) =>
+        setCompanies(
+          (d.companies ?? d ?? []).map((c: { id: string; name: string }) => ({
+            id: c.id,
+            name: c.name,
+          })),
+        ),
+      );
+
   React.useEffect(() => {
     loadUsers();
+    loadCompanies();
   }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -68,7 +83,11 @@ export default function AdminUsersPage() {
       const res = await fetch("/api/auth/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify({
+          email: inviteEmail,
+          role: inviteRole,
+          companyId: inviteCompanyId || undefined,
+        }),
       });
       const data = await res.json();
 
@@ -96,6 +115,7 @@ export default function AdminUsersPage() {
     setShowInviteModal(false);
     setInviteEmail("");
     setInviteRole("CUSTOMER");
+    setInviteCompanyId("");
     setInviteUrl("");
     setInviteError("");
     setCopied(false);
@@ -204,6 +224,35 @@ export default function AdminUsersPage() {
                       ]}
                     />
                   </div>
+
+                  {inviteRole === "CUSTOMER" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Company
+                      </label>
+                      <Select
+                        value={inviteCompanyId}
+                        onChange={(e) => setInviteCompanyId(e.target.value)}
+                        options={[
+                          { value: "", label: "— Select existing customer —" },
+                          ...companies
+                            .slice()
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((c) => ({ value: c.id, label: c.name })),
+                        ]}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Pick from existing customers to avoid duplicates.{" "}
+                        <a
+                          href="/dashboard/admin/companies"
+                          target="_blank"
+                          className="text-brand-600 hover:underline"
+                        >
+                          Add new customer →
+                        </a>
+                      </p>
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={inviteLoading}>
                     {inviteLoading ? (

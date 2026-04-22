@@ -98,11 +98,55 @@ export default function AdminCompaniesPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Industry</label>
-                <Input
-                  placeholder="Real Estate"
+                <select
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm bg-white"
                   value={form.industry}
                   onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                />
+                >
+                  <option value="">— Select industry —</option>
+                  <option value="Real Estate / Land">Real Estate / Land</option>
+                  <option value="Real Estate / Residential">Real Estate / Residential</option>
+                  <option value="Real Estate / Commercial">Real Estate / Commercial</option>
+                  <option value="Real Estate / Property Management">Real Estate / Property Management</option>
+                  <option value="Home Services / HVAC">Home Services / HVAC</option>
+                  <option value="Home Services / Plumbing">Home Services / Plumbing</option>
+                  <option value="Home Services / Roofing">Home Services / Roofing</option>
+                  <option value="Home Services / Landscaping">Home Services / Landscaping</option>
+                  <option value="Home Services / Cleaning">Home Services / Cleaning</option>
+                  <option value="Home Services / Pest Control">Home Services / Pest Control</option>
+                  <option value="Home Services / Other">Home Services / Other</option>
+                  <option value="Healthcare / Dental">Healthcare / Dental</option>
+                  <option value="Healthcare / Medical Practice">Healthcare / Medical Practice</option>
+                  <option value="Healthcare / Chiropractic">Healthcare / Chiropractic</option>
+                  <option value="Healthcare / Optometry">Healthcare / Optometry</option>
+                  <option value="Healthcare / Veterinary">Healthcare / Veterinary</option>
+                  <option value="Legal / Law Firm">Legal / Law Firm</option>
+                  <option value="Financial / Insurance">Financial / Insurance</option>
+                  <option value="Financial / Accounting">Financial / Accounting</option>
+                  <option value="Financial / Mortgage">Financial / Mortgage</option>
+                  <option value="Financial / Wealth Management">Financial / Wealth Management</option>
+                  <option value="Automotive / Dealer">Automotive / Dealer</option>
+                  <option value="Automotive / Repair">Automotive / Repair</option>
+                  <option value="Restaurant / Food Service">Restaurant / Food Service</option>
+                  <option value="Retail / E-commerce">Retail / E-commerce</option>
+                  <option value="Retail / Brick & Mortar">Retail / Brick & Mortar</option>
+                  <option value="Fitness / Gym">Fitness / Gym</option>
+                  <option value="Fitness / Studio">Fitness / Studio</option>
+                  <option value="Beauty / Salon">Beauty / Salon</option>
+                  <option value="Beauty / Spa">Beauty / Spa</option>
+                  <option value="Education / Tutoring">Education / Tutoring</option>
+                  <option value="Education / Private School">Education / Private School</option>
+                  <option value="Non-profit">Non-profit</option>
+                  <option value="Political / Campaign">Political / Campaign</option>
+                  <option value="Religious / House of Worship">Religious / House of Worship</option>
+                  <option value="Professional Services">Professional Services</option>
+                  <option value="Construction">Construction</option>
+                  <option value="Manufacturing">Manufacturing</option>
+                  <option value="Technology / SaaS">Technology / SaaS</option>
+                  <option value="Marketing Agency">Marketing Agency</option>
+                  <option value="Print / Mail Industry">Print / Mail Industry</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Website</label>
