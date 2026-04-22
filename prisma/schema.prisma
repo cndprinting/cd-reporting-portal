@@ -600,6 +600,30 @@ model MailerTemplate {
   @@index([isActive])
 }
 
+// -------- Unknown IMb log — scans we received but couldn't match to a MailPiece --------
+// Used by the admin debugger at /dashboard/admin/unknown-imbs to diagnose
+// "scans coming in but no orders lighting up" situations (usually means the
+// piece list was never imported, or imported under a different campaign).
+model UnknownImb {
+  id                   String    @id @default(cuid())
+  imb                  String    @unique
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime  @default(now())
+  occurrences          Int       @default(1)
+  // Sample metadata from the first scan we saw — helps admin figure out what it is
+  sampleOperation      String?
+  sampleFacilityCity   String?
+  sampleFacilityState  String?
+  sampleFacilityZip    String?
+  sampleIngestionId    String?   // FK-ish reference to IVFeedIngestion.id
+  // Resolved = we've imported the matching MailPiece, so future scans will match
+  isResolved           Boolean   @default(false)
+  resolvedAt           DateTime?
+
+  @@index([isResolved])
+  @@index([lastSeenAt])
+}
+
 // -------- Drop notification log — so we don't send duplicate "landed" emails --------
 model DropNotification {
   id         String   @id @default(cuid())

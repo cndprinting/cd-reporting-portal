@@ -109,7 +109,28 @@ export async function ingestIVFile(input: {
       const piece = pieceByImb.get(rec.imb);
       if (!piece) {
         unknownImbs++;
-        continue; // scan for an IMb we don't know about — log but skip
+        // Persist the unknown IMb so admins can debug in the UI.
+        // Upsert increments occurrences on repeat sightings.
+        await prisma.unknownImb
+          .upsert({
+            where: { imb: rec.imb },
+            create: {
+              imb: rec.imb,
+              sampleOperation: rec.operationCode ?? rec.operationDesc ?? null,
+              sampleFacilityCity: rec.facilityCity ?? null,
+              sampleFacilityState: rec.facilityState ?? null,
+              sampleFacilityZip: rec.facilityZip ?? null,
+              sampleIngestionId: ingestion.id,
+            },
+            update: {
+              lastSeenAt: new Date(),
+              occurrences: { increment: 1 },
+            },
+          })
+          .catch(() => {
+            /* swallow — not worth failing the whole ingestion for logging */
+          });
+        continue;
       }
 
       const scanDate = new Date(rec.scanDateTime);
@@ -352,6 +373,18 @@ export async function importMailFile(params: {
     } catch {
       skipped++; // likely duplicate IMb
     }
+  }
+
+  // Auto-resolve any UnknownImb rows whose IMbs we just imported.
+  // Next time a scan for them arrives, it'll match the new MailPiece.
+  const importedImbs = params.rows.map((r) => r.imb.replace(/\D/g, ""));
+  if (importedImbs.length > 0) {
+    await prisma.unknownImb
+      .updateMany({
+        where: { imb: { in: importedImbs }, isResolved: false },
+        data: { isResolved: true, resolvedAt: new Date() },
+      })
+      .catch(() => {});
   }
 
   return { inserted, skipped };
