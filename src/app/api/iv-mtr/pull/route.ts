@@ -1,100 +1,30 @@
 /**
- * Scheduled worker that pulls new scans from USPS IV-MTR REST API.
- * Call via Vercel Cron (vercel.json): every 30 min.
+ * DEPRECATED — kept as a 410 Gone stub.
  *
- * Requires env:
- *   IV_MTR_API_BASE (default https://iv.usps.com/ivws/api)
- *   IV_MTR_USER_ID (BCG username)
- *   IV_MTR_PASSWORD (BCG password)
- *   IV_MTR_MID (your Mailer ID)
- *   CRON_SECRET (Vercel-generated, sent as Authorization: Bearer)
+ * This endpoint used to poll the legacy USPS IV-MTR REST API at
+ * iv.usps.com/ivws/api. USPS retired that platform in January 2026 as part
+ * of the Web Tools API retirement + April 2026 API Access Control initiative.
+ *
+ * We now receive scan data via the IV-MTR "HTTPS JSON" push feed configured
+ * at iv.usps.com. USPS POSTs scan events to /api/iv-mtr/ingest every hour,
+ * authenticated via HTTP Basic Auth (IV_MTR_PUSH_USER / IV_MTR_INGEST_KEY).
+ *
+ * Any caller hitting this route — including stale cron jobs, legacy bookmarks,
+ * or monitoring probes — should update to reference /api/iv-mtr/ingest.
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { ingestIVFile, type IVScanRecord } from "@/lib/services/iv-mtr-ingest";
-import { USPS_MID } from "@/lib/usps-config";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
 
-export async function GET(req: NextRequest) {
-  // Vercel cron sends Authorization: Bearer <CRON_SECRET>.
-  // Admins can also trigger manually from /dashboard/admin/ingestion.
-  const auth = req.headers.get("authorization");
-  const isCron = auth === `Bearer ${process.env.CRON_SECRET}`;
-  let isAdmin = false;
-  if (!isCron) {
-    const { getSession } = await import("@/lib/session");
-    const session = await getSession();
-    isAdmin = !!session && (session.role === "ADMIN" || session.role === "ACCOUNT_MANAGER");
-  }
-  if (!isCron && !isAdmin) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const base = process.env.IV_MTR_API_BASE ?? "https://iv.usps.com/ivws/api";
-  const userId = process.env.IV_MTR_USER_ID;
-  const password = process.env.IV_MTR_PASSWORD;
-  const crid = process.env.IV_MTR_CRID?.trim();
-  // IV_MTR_MID may be a single value or comma-separated list.
-  const midsEnv = process.env.IV_MTR_MID ?? USPS_MID ?? "";
-  const mids = midsEnv
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (!userId || !password || (!crid && mids.length === 0)) {
-    return NextResponse.json(
-      { error: "IV-MTR credentials not configured (need USER_ID, PASSWORD, and CRID or MID)" },
-      { status: 500 },
-    );
-  }
-
-  // 1. Auth (IV-MTR uses BCG username/password → session token)
-  const loginResp = await fetch(`${base}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ userId, password }),
-  });
-  if (!loginResp.ok) {
-    return NextResponse.json({ error: "IV-MTR login failed" }, { status: 502 });
-  }
-  const { token } = (await loginResp.json()) as { token: string };
-
-  // 2. Pull scans for the last 60 min window (USPS caps each pull).
-  //    Prefer CRID (rolls up all MIDs under the company); fall back to looping
-  //    over each MID if CRID isn't set.
-  const now = new Date();
-  const start = new Date(now.getTime() - 60 * 60 * 1000);
-  const queries = crid
-    ? [`crid=${crid}`]
-    : mids.map((m) => `mid=${m}`);
-
-  const allRecords: IVScanRecord[] = [];
-  const queryErrors: string[] = [];
-  for (const q of queries) {
-    const url = `${base}/scans?${q}&start=${start.toISOString()}&end=${now.toISOString()}`;
-    const scansResp = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!scansResp.ok) {
-      queryErrors.push(`${q}: HTTP ${scansResp.status}`);
-      continue;
-    }
-    const batch = (await scansResp.json()) as IVScanRecord[];
-    if (Array.isArray(batch)) allRecords.push(...batch);
-  }
-  if (allRecords.length === 0 && queryErrors.length === queries.length) {
-    return NextResponse.json(
-      { error: "IV-MTR scan pull failed", details: queryErrors },
-      { status: 502 },
-    );
-  }
-
-  // 3. Ingest
-  const result = await ingestIVFile({
-    source: "iv-mtr-pull",
-    fileName: `pull-${now.toISOString()}.json`,
-    body: allRecords,
-  });
-  return NextResponse.json({ ...result, queries, queryErrors });
+export async function GET() {
+  return NextResponse.json(
+    {
+      error: "deprecated",
+      message:
+        "This endpoint has been retired. USPS scan data now arrives via push at /api/iv-mtr/ingest. No action required.",
+      redirectTo: "/api/iv-mtr/ingest",
+    },
+    { status: 410 },
+  );
 }

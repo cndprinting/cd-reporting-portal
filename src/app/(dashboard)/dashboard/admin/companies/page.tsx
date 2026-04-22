@@ -1,11 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Building2, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Plus, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
+/**
+ * Loose-match heuristic: strip non-alphanum, lowercase, check substring both
+ * directions. Catches "Aaron Waxman RE" vs "Aaron Waxman Real Estate" and
+ * "BH Land" vs "BH Land Group".
+ */
+function fuzzyMatches(needle: string, hay: string): boolean {
+  const n = needle.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const h = hay.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  if (n.length < 3) return false;
+  return h.includes(n) || n.includes(h);
+}
 
 interface Company {
   id: string;
@@ -88,13 +100,50 @@ export default function AdminCompaniesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="md:col-span-2">
                 <label className="text-xs text-gray-600 mb-1 block">Company Name *</label>
                 <Input
                   placeholder="Aaron Waxman Real Estate"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  list="existing-customers"
                 />
+                <datalist id="existing-customers">
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
+                {(() => {
+                  const matches = companies.filter((c) => fuzzyMatches(form.name, c.name));
+                  if (matches.length === 0) return null;
+                  return (
+                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {matches.length === 1
+                              ? "A similar customer already exists:"
+                              : `${matches.length} similar customers already exist:`}
+                          </div>
+                          <ul className="mt-1 space-y-0.5">
+                            {matches.slice(0, 5).map((m) => (
+                              <li key={m.id} className="flex items-center justify-between gap-2">
+                                <span className="font-mono">{m.name}</span>
+                                {m.industry && (
+                                  <span className="text-amber-700/70">{m.industry}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="mt-1.5 text-amber-700/80">
+                            Make sure this is a genuinely new company before clicking Create.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Industry</label>

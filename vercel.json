@@ -1,10 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/iv-mtr/pull",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/reports/weekly-cron",
       "schedule": "0 12 * * 1"
     }
