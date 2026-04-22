@@ -1,0 +1,19 @@
+{
+  "name": "cd-accuzip-watcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Watches the AccuZIP output folder and uploads finished job files to the C&D Marketing Portal.",
+  "main": "watcher.js",
+  "scripts": {
+    "start": "node watcher.js",
+    "install-service": "node install-service.js",
+    "uninstall-service": "node install-service.js uninstall"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
