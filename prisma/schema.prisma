@@ -110,6 +110,12 @@ model Company {
   phone       String?
   industry    String?
   isActive    Boolean    @default(true)
+  // ── Cross-system unification ──────────────────────────────────────
+  // Foreign key to the same customer in Godzilla (cd-packaging ERP).
+  // When set, this Company record represents the marketing side of a
+  // customer who also exists in Godzilla's customer database. Used to
+  // dedupe + unify reporting across both portals.
+  externalCustomerId String? @unique  // e.g. Godzilla's customer ID
   // Scheduled reports
   weeklyReportEnabled   Boolean  @default(true)
   weeklyReportRecipients String? // comma-separated emails; null = all company users

@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
       name: true,
       slug: true,
       industry: true,
+      externalCustomerId: true,
       weeklyReportEnabled: true,
       weeklyReportRecipients: true,
       lastWeeklyReportAt: true,
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
   if (!prisma) return NextResponse.json({ error: "db unavailable" }, { status: 503 });
 
   const body = await req.json();
-  const { name, industry, website, address, phone } = body;
+  const { name, industry, website, address, phone, externalCustomerId } = body;
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
 
   let baseSlug = name
@@ -95,7 +96,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const company = await prisma.company.create({
-      data: { name, slug, industry, website, address, phone },
+      data: {
+        name,
+        slug,
+        industry,
+        website,
+        address,
+        phone,
+        externalCustomerId: externalCustomerId || null,
+      },
     });
     return NextResponse.json(company, { status: 201 });
   } catch (e) {

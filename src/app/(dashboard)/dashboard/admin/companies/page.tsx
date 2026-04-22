@@ -24,6 +24,7 @@ interface Company {
   name: string;
   slug: string;
   industry: string | null;
+  externalCustomerId?: string | null;
   users?: { email: string; name: string | null }[];
 }
 
@@ -36,6 +37,7 @@ export default function AdminCompaniesPage() {
     website: "",
     address: "",
     phone: "",
+    externalCustomerId: "",
   });
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -71,7 +73,14 @@ export default function AdminCompaniesPage() {
         setErr(data.error ?? "Create failed");
       } else {
         setShowForm(false);
-        setForm({ name: "", industry: "", website: "", address: "", phone: "" });
+        setForm({
+          name: "",
+          industry: "",
+          website: "",
+          address: "",
+          phone: "",
+          externalCustomerId: "",
+        });
         load();
       }
     } finally {
@@ -180,6 +189,23 @@ export default function AdminCompaniesPage() {
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
               </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">
+                  Godzilla Customer ID
+                  <span className="text-gray-400 ml-1">(if existing packaging customer)</span>
+                </label>
+                <Input
+                  placeholder="e.g. 10472"
+                  value={form.externalCustomerId}
+                  onChange={(e) =>
+                    setForm({ ...form, externalCustomerId: e.target.value })
+                  }
+                />
+                <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                  Links this marketing customer to the same record in the packaging
+                  portal (Godzilla). Leave blank for marketing-only customers.
+                </div>
+              </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-gray-600 mb-1 block">Address</label>
                 <Input
@@ -213,6 +239,7 @@ export default function AdminCompaniesPage() {
               <tr>
                 <th className="px-4 py-3">Customer</th>
                 <th>Industry</th>
+                <th>Godzilla</th>
                 <th className="text-right">Users</th>
                 <th>Status</th>
               </tr>
@@ -220,7 +247,7 @@ export default function AdminCompaniesPage() {
             <tbody>
               {companies.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-400">
+                  <td colSpan={5} className="p-8 text-center text-gray-400">
                     No customers yet. Click “Add Customer” above to create the first one.
                   </td>
                 </tr>
@@ -229,6 +256,15 @@ export default function AdminCompaniesPage() {
                 <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
                   <td className="text-gray-600">{c.industry ?? "—"}</td>
+                  <td className="text-xs">
+                    {c.externalCustomerId ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-violet-50 border border-violet-200 text-violet-700 px-1.5 py-0.5 font-mono">
+                        #{c.externalCustomerId}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">not linked</span>
+                    )}
+                  </td>
                   <td className="text-right">{c.users?.length ?? 0}</td>
                   <td>
                     <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
