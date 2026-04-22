@@ -337,6 +337,9 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Admin-only: upload AccuZIP Mail.dat output for this order */}
+      {isAdmin && <MailDatUploadCard orderId={id!} orderCode={order.orderCode} />}
+
       {/* Final Quantity Reconciliation — visible to both admin + customer
           (admin can adjust, customer sees the result) */}
       <FinalQuantityCard order={order} isAdmin={isAdmin} orderId={id!} onUpdate={reload} />
@@ -1181,6 +1184,124 @@ function FinalQuantityCard({
                 : "Apply Adjustment"}
             </Button>
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Admin-only card: upload the AccuZIP Presort folder (as a ZIP) or just the
+ * maildat.pbc file directly. Server parses IMbs, creates MailPieces tied to
+ * this order's campaign so USPS scan pushes will match them.
+ */
+function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<{
+    validImbs: number;
+    inserted: number;
+    skippedDuplicates: number;
+    totalRowsParsed: number;
+    pbcFile: string;
+  } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    setErr(null);
+    setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/orders/${orderId}/ingest-maildat`, {
+        method: "POST",
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setErr(d.error ?? "Upload failed");
+        return;
+      }
+      setResult(d);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileSpreadsheet className="h-4 w-4" />
+          AccuZIP Mail.dat Upload
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="text-xs text-gray-600 leading-relaxed">
+          After AccuZIP finishes the job, upload either the entire{" "}
+          <strong>Presort folder</strong> as a ZIP <em>or</em> just the{" "}
+          <code className="bg-gray-100 px-1 rounded">maildat.pbc</code> file. We
+          extract every IMb, create a MailPiece record for each, and tie them to{" "}
+          <span className="font-mono">{orderCode}</span>&rsquo;s campaign. Once
+          USPS starts scanning, our push feed will match pieces to this order
+          automatically.
+        </div>
+
+        {result ? (
+          <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900 space-y-1">
+            <div className="font-semibold">
+              ✓ Imported {result.validImbs.toLocaleString()} IMbs
+            </div>
+            <div className="text-xs grid grid-cols-2 gap-x-4 gap-y-0.5">
+              <div>Source file:</div>
+              <div className="font-mono truncate">{result.pbcFile}</div>
+              <div>Rows parsed:</div>
+              <div>{result.totalRowsParsed.toLocaleString()}</div>
+              <div>New MailPieces inserted:</div>
+              <div>{result.inserted.toLocaleString()}</div>
+              <div>Duplicates skipped:</div>
+              <div>{result.skippedDuplicates.toLocaleString()}</div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setResult(null)}
+              className="mt-2"
+            >
+              Upload another
+            </Button>
+          </div>
+        ) : (
+          <label
+            className={`block rounded-lg border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
+              uploading
+                ? "border-gray-300 bg-gray-50 pointer-events-none opacity-60"
+                : "border-gray-300 hover:border-violet-400 hover:bg-violet-50"
+            }`}
+          >
+            <input
+              type="file"
+              className="hidden"
+              accept=".zip,.pbc"
+              disabled={uploading}
+              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+            />
+            <Upload className="h-7 w-7 text-violet-500 mx-auto mb-2" />
+            <div className="text-sm font-medium text-gray-700">
+              {uploading ? "Parsing Mail.dat…" : "Drop Presort folder ZIP or maildat.pbc"}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              Accepts <code className="bg-gray-100 px-1 rounded">.zip</code> or{" "}
+              <code className="bg-gray-100 px-1 rounded">.pbc</code> · max 50 MB
+            </div>
+          </label>
+        )}
+
+        {err && (
+          <div className="rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-900">
+            <div className="font-semibold">Upload failed</div>
+            <div className="mt-0.5 text-xs">{err}</div>
+          </div>
         )}
       </CardContent>
     </Card>
