@@ -131,6 +131,7 @@ model Company {
   apiKeys     ApiKey[]
   orders      Order[]
   mailPackages MailPackage[]
+  retargetingInterests RetargetingInterest[]
   // Saved Stripe customer id (lets us charge the card on file)
   stripeCustomerId String?
   createdAt   DateTime   @default(now())
@@ -598,6 +599,23 @@ model MailerTemplate {
 
   @@index([category])
   @@index([isActive])
+}
+
+// -------- Retargeting interest signals — customers who clicked "Notify me" on the
+//          placeholder upsell card. Used for sales prioritization + launch-list emails.
+model RetargetingInterest {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String   // user who clicked — for audit
+  orderId    String?  // optional: which order triggered the interest
+  product    String   @default("website-to-mailbox") // "website-to-mailbox" | "everywhere"
+  note       String?  // optional free-text ("wants to see sample ads", etc.)
+  createdAt  DateTime @default(now())
+  contactedAt DateTime? // admin sets when outreach happens
+
+  @@index([companyId])
+  @@index([createdAt])
 }
 
 // -------- Unknown IMb log — scans we received but couldn't match to a MailPiece --------

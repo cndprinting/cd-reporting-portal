@@ -344,6 +344,11 @@ export default function OrderDetailPage() {
           (admin can adjust, customer sees the result) */}
       <FinalQuantityCard order={order} isAdmin={isAdmin} orderId={id!} onUpdate={reload} />
 
+      {/* Retargeting upsell — shown to customers only, after approval */}
+      {isCustomer && ["APPROVED", "DROPPED", "DELIVERING", "COMPLETE"].includes(order.status) && (
+        <RetargetingUpsellCard orderId={id!} />
+      )}
+
       {/* Order details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
@@ -1303,6 +1308,119 @@ function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode:
             <div className="mt-0.5 text-xs">{err}</div>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Retargeting upsell — shown to customers post-approval. Two products:
+ *   - Website to Mailbox (mail-retargets anonymous web visitors)
+ *   - Everywhere (digital ads to the people on your mail list)
+ *
+ * Both are placeholder-only today — clicking "Notify me" logs interest
+ * and emails C&D's sales team. We'll wire to AdCellerant + LeadPost
+ * once channel-partner agreements land.
+ */
+function RetargetingUpsellCard({ orderId }: { orderId: string }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [signaled, setSignaled] = useState<Set<string>>(new Set());
+
+  const signal = async (product: "website-to-mailbox" | "everywhere") => {
+    setBusy(product);
+    try {
+      const r = await fetch("/api/retargeting/interest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product, orderId }),
+      });
+      if (r.ok) setSignaled((prev) => new Set([...prev, product]));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-violet-900">
+          ⚡ Add retargeting to this campaign
+          <Badge className="ml-auto bg-violet-100 text-violet-700 text-[10px]">
+            Coming Soon
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          Multiply this mailing&rsquo;s ROI with two add-ons launching soon. Click
+          &ldquo;Notify me&rdquo; on either to be on the early-access list.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Website to Mailbox */}
+          <div className="rounded-lg border border-violet-200 bg-white p-3 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-semibold text-sm text-gray-900">
+                  Website to Mailbox
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  ~$0.20 per identified visitor
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-700 leading-relaxed">
+              When someone visits your website but doesn&rsquo;t convert, we
+              identify their physical address and auto-mail a postcard within
+              1 business day. Your offer follows them home.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full border-violet-200 text-violet-700 hover:bg-violet-50"
+              onClick={() => signal("website-to-mailbox")}
+              disabled={busy === "website-to-mailbox" || signaled.has("website-to-mailbox")}
+            >
+              {signaled.has("website-to-mailbox")
+                ? "✓ You're on the list"
+                : busy === "website-to-mailbox"
+                ? "Sending…"
+                : "Notify me when available"}
+            </Button>
+          </div>
+
+          {/* Everywhere */}
+          <div className="rounded-lg border border-violet-200 bg-white p-3 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-semibold text-sm text-gray-900">
+                  Everywhere
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  $199–499 / mo per campaign
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-700 leading-relaxed">
+              Digital ads on Google, Meta &amp; Instagram run against the same
+              people you&rsquo;re mailing. They see your brand in their mailbox
+              AND online — 70% lift in response per industry data.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full border-violet-200 text-violet-700 hover:bg-violet-50"
+              onClick={() => signal("everywhere")}
+              disabled={busy === "everywhere" || signaled.has("everywhere")}
+            >
+              {signaled.has("everywhere")
+                ? "✓ You're on the list"
+                : busy === "everywhere"
+                ? "Sending…"
+                : "Notify me when available"}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

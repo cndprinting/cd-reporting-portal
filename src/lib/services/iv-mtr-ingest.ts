@@ -104,32 +104,35 @@ export async function ingestIVFile(input: {
   });
   const pieceByImb = new Map(pieces.map((p) => [p.imb, p]));
 
+  // Collect unmatched IMbs first; we'll persist them in 2 bulk queries below
+  // instead of N sequential upserts (which timed out on 372-row pushes).
+  const unmatchedSamples = new Map<
+    string,
+    {
+      imb: string;
+      sampleOperation: string | null;
+      sampleFacilityCity: string | null;
+      sampleFacilityState: string | null;
+      sampleFacilityZip: string | null;
+      sampleIngestionId: string;
+    }
+  >();
+
   for (const rec of records) {
     try {
       const piece = pieceByImb.get(rec.imb);
       if (!piece) {
         unknownImbs++;
-        // Persist the unknown IMb so admins can debug in the UI.
-        // Upsert increments occurrences on repeat sightings.
-        await prisma.unknownImb
-          .upsert({
-            where: { imb: rec.imb },
-            create: {
-              imb: rec.imb,
-              sampleOperation: rec.operationCode ?? rec.operationDesc ?? null,
-              sampleFacilityCity: rec.facilityCity ?? null,
-              sampleFacilityState: rec.facilityState ?? null,
-              sampleFacilityZip: rec.facilityZip ?? null,
-              sampleIngestionId: ingestion.id,
-            },
-            update: {
-              lastSeenAt: new Date(),
-              occurrences: { increment: 1 },
-            },
-          })
-          .catch(() => {
-            /* swallow — not worth failing the whole ingestion for logging */
+        if (!unmatchedSamples.has(rec.imb)) {
+          unmatchedSamples.set(rec.imb, {
+            imb: rec.imb,
+            sampleOperation: rec.operationCode ?? rec.operationDesc ?? null,
+            sampleFacilityCity: rec.facilityCity ?? null,
+            sampleFacilityState: rec.facilityState ?? null,
+            sampleFacilityZip: rec.facilityZip ?? null,
+            sampleIngestionId: ingestion.id,
           });
+        }
         continue;
       }
 
@@ -180,6 +183,32 @@ export async function ingestIVFile(input: {
       errors.push(`${rec.imb}: ${(e as Error).message}`);
       skipped++;
     }
+  }
+
+  // Bulk-persist unmatched IMbs in 2 queries instead of N sequential upserts:
+  //   1. createMany skipDuplicates → inserts brand-new ones with occurrences=1
+  //   2. updateMany over the same set → bumps occurrences + lastSeenAt for ones
+  //      that already existed before this batch
+  // We use updateMany WHERE imb IN (...) AND firstSeenAt < <runStart> so we
+  // only bump pre-existing rows, leaving fresh inserts at occurrences=1.
+  if (unmatchedSamples.size > 0) {
+    const runStart = new Date();
+    const samplesArr = [...unmatchedSamples.values()];
+    await prisma.unknownImb
+      .createMany({ data: samplesArr, skipDuplicates: true })
+      .catch((e) => errors.push(`unknownImb createMany: ${(e as Error).message}`));
+    await prisma.unknownImb
+      .updateMany({
+        where: {
+          imb: { in: samplesArr.map((s) => s.imb) },
+          firstSeenAt: { lt: runStart },
+        },
+        data: {
+          lastSeenAt: new Date(),
+          occurrences: { increment: 1 },
+        },
+      })
+      .catch((e) => errors.push(`unknownImb updateMany: ${(e as Error).message}`));
   }
 
   // Recompute status for every affected mailpiece
