@@ -44,6 +44,7 @@ const adminNav: NavLink[] = [
   { label: "Users", href: "/dashboard/admin/users" },
   { label: "API Keys", href: "/dashboard/admin/mailers" },
   { label: "Mail Import (manual)", href: "/dashboard/admin/mail-import" },
+  { label: "Auto-Import (SharePoint)", href: "/dashboard/admin/auto-import" },
   { label: "USPS Feed Monitor", href: "/dashboard/admin/ingestion" },
   { label: "Unknown IMbs", href: "/dashboard/admin/unknown-imbs" },
   { label: "Scan Map", href: "/dashboard/admin/scan-map" },

@@ -601,6 +601,33 @@ model MailerTemplate {
   @@index([isActive])
 }
 
+// -------- SharePoint auto-import audit log — one row per file the watcher processes.
+//          Lets admins see what came in, which customer it routed to, and any errors.
+model SharepointImport {
+  id              String   @id @default(cuid())
+  // SharePoint metadata
+  sharepointItemId String  @unique // Graph item ID (so we don't reimport the same file)
+  fileName        String
+  fileSize        Int
+  folderName      String   // parent folder name = customer name from the drop
+  // Where it ended up in our system
+  matchedCompanyId String?
+  createdOrderId  String?
+  createdCampaignId String?
+  imbsImported    Int      @default(0)
+  imbsSkipped     Int      @default(0)
+  // Status
+  status          String   // "PROCESSING" | "COMPLETED" | "FAILED"
+  errorMessage    String?
+  // Audit
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+  @@index([matchedCompanyId])
+}
+
 // -------- Retargeting interest signals — customers who clicked "Notify me" on the
 //          placeholder upsell card. Used for sales prioritization + launch-list emails.
 model RetargetingInterest {
