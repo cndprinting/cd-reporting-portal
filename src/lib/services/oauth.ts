@@ -46,18 +46,23 @@ export const GOOGLE_CONFIG: OAuthProviderConfig = {
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
 };
 
+// Single-tenant Azure AD app — must use the specific tenant ID, not /common.
+// (The MailerCity app was registered as "Accounts in this organizational
+// directory only".) Falls back to /common if MS_GRAPH_TENANT_ID isn't set so
+// dev environments without the env var still build.
+const MS_TENANT = process.env.MS_GRAPH_TENANT_ID || "common";
+
 export const MICROSOFT_CONFIG: OAuthProviderConfig = {
   provider: "microsoft",
-  // /common = accept any tenant + personal accounts. Use /organizations to
-  // restrict to work/school accounts only. /common is friendliest.
-  authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-  tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+  authorizeUrl: `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/authorize`,
+  tokenUrl: `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/token`,
   userinfoUrl: "https://graph.microsoft.com/oidc/userinfo",
-  scopes: "openid email profile User.Read",
+  // Just OIDC scopes — User.Read isn't needed for the userinfo endpoint
+  scopes: "openid email profile",
   clientId: process.env.MICROSOFT_CLIENT_ID ?? process.env.MS_GRAPH_CLIENT_ID,
   clientSecret:
     process.env.MICROSOFT_CLIENT_SECRET ?? process.env.MS_GRAPH_CLIENT_SECRET,
-  tokenExtraParams: { scope: "openid email profile User.Read" },
+  tokenExtraParams: { scope: "openid email profile" },
 };
 
 function portalUrl(): string {
