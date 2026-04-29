@@ -39,13 +39,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!prisma) return NextResponse.json({ error: "db unavailable" }, { status: 503 });
 
-  const { name, companyId, description, campaignCode, destinationUrl, status } =
-    await request.json();
+  const body = await request.json();
+  const { name, description, campaignCode, destinationUrl, status } = body;
+  let { companyId } = body;
+
+  // Customers can only create campaigns for their own company. Force the
+  // companyId to their session's companyId (ignore whatever they sent).
+  if (session.role === "CUSTOMER") {
+    if (!session.companyId) {
+      return NextResponse.json({ error: "no company on session" }, { status: 400 });
+    }
+    companyId = session.companyId;
+  }
+
   if (!name || !companyId) {
     return NextResponse.json({ error: "name and companyId required" }, { status: 400 });
   }

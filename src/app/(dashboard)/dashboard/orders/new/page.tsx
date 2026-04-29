@@ -93,6 +93,11 @@ export default function NewOrderPage() {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignId, setCampaignId] = useState("");
+  // Inline campaign create
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState("");
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [campaignErr, setCampaignErr] = useState<string | null>(null);
   const [customOffer, setCustomOffer] = useState("");
   const [dropDate, setDropDate] = useState(() => {
     const d = new Date();
@@ -104,8 +109,51 @@ export default function NewOrderPage() {
 
   useEffect(() => {
     fetch("/api/templates").then((r) => r.json()).then((d) => setTemplates(d.templates ?? []));
-    fetch("/api/campaigns").then((r) => r.json()).then((d) => setCampaigns(d.campaigns ?? []));
+    fetch("/api/campaigns")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Campaign[] = d.campaigns ?? [];
+        setCampaigns(list);
+        // Auto-select if there's exactly one — customer doesn't have to think
+        if (list.length === 1) setCampaignId(list[0].id);
+      });
   }, []);
+
+  const createCampaign = async () => {
+    if (!newCampaignName.trim()) {
+      setCampaignErr("Give the campaign a name");
+      return;
+    }
+    setCreatingCampaign(true);
+    setCampaignErr(null);
+    try {
+      const r = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCampaignName.trim() }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setCampaignErr(d.error ?? "Couldn't create campaign");
+        return;
+      }
+      // Add to list and auto-select
+      setCampaigns((prev) => [
+        ...prev,
+        {
+          id: d.id,
+          name: d.name,
+          campaignCode: d.campaignCode,
+          companyId: d.companyId,
+        },
+      ]);
+      setCampaignId(d.id);
+      setShowNewCampaign(false);
+      setNewCampaignName("");
+    } finally {
+      setCreatingCampaign(false);
+    }
+  };
 
   const rowCount = sheet?.rowCount ?? 0;
   const quality = useMemo(() => (sheet ? mappingQuality(mapping) : 0), [sheet, mapping]);
@@ -564,18 +612,73 @@ export default function NewOrderPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-gray-600 mb-1 block">Campaign *</label>
-              <select
-                className="w-full h-9 rounded-md border border-gray-300 px-3 text-sm"
-                value={campaignId}
-                onChange={(e) => setCampaignId(e.target.value)}
-              >
-                <option value="">Select campaign…</option>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.campaignCode} — {c.name}
-                  </option>
-                ))}
-              </select>
+              {showNewCampaign ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="e.g. Spring 2026 Outreach"
+                    value={newCampaignName}
+                    onChange={(e) => setNewCampaignName(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") createCampaign();
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={createCampaign}
+                      disabled={creatingCampaign || !newCampaignName.trim()}
+                    >
+                      {creatingCampaign ? "Creating…" : "Create"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowNewCampaign(false);
+                        setNewCampaignName("");
+                        setCampaignErr(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {campaignErr && (
+                    <div className="text-xs text-rose-700">{campaignErr}</div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <select
+                    className="w-full h-9 rounded-md border border-gray-300 px-3 text-sm"
+                    value={campaignId}
+                    onChange={(e) => {
+                      if (e.target.value === "__NEW__") {
+                        setShowNewCampaign(true);
+                      } else {
+                        setCampaignId(e.target.value);
+                      }
+                    }}
+                  >
+                    {campaigns.length === 0 && (
+                      <option value="">No campaigns yet — create one →</option>
+                    )}
+                    {campaigns.length > 0 && (
+                      <option value="">Select campaign…</option>
+                    )}
+                    {campaigns.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.campaignCode} — {c.name}
+                      </option>
+                    ))}
+                    <option value="__NEW__">+ Create new campaign…</option>
+                  </select>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    A &ldquo;campaign&rdquo; just groups related mailings. Pick an
+                    existing one or create a new one.
+                  </div>
+                </>
+              )}
             </div>
             <div>
               <label className="text-xs text-gray-600 mb-1 flex items-center gap-1">

@@ -108,6 +108,27 @@ export async function POST(req: NextRequest) {
         externalCustomerId: externalCustomerId || null,
       },
     });
+
+    // Auto-create a default campaign so the customer's order flow has
+    // something pre-selected in the campaign dropdown. Customers don't think
+    // in "campaigns" — they think in "I want to mail this list now."
+    await prisma.campaign
+      .create({
+        data: {
+          companyId: company.id,
+          name: `${name} — General`,
+          campaignCode: `CD-${new Date().getFullYear()}-${slug
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "")
+            .slice(0, 12)}-GEN`,
+          description:
+            "Default campaign — orders without a specific campaign land here.",
+        },
+      })
+      .catch(() => {
+        // Don't fail the company create if the campaign hits a unique-code collision
+      });
+
     return NextResponse.json(company, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
