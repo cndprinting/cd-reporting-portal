@@ -130,9 +130,14 @@ export function buildAuthorizeUrl(
     redirect_uri: redirectUri(cfg.provider),
     scope: cfg.scopes,
     state,
-    access_type: "offline",
     prompt: "select_account",
   });
+  // access_type=offline is a Google-specific parameter for getting refresh
+  // tokens. Microsoft rejects it with invalid_request — for MS the equivalent
+  // is including `offline_access` in scopes (we don't need offline access).
+  if (cfg.provider === "google") {
+    params.set("access_type", "offline");
+  }
   return `${cfg.authorizeUrl}?${params}`;
 }
 

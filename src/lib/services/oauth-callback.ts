@@ -34,11 +34,14 @@ export async function handleOAuthCallback(
   const errorParam = url.searchParams.get("error");
 
   if (errorParam) {
+    // Microsoft sends extra detail in error_description — surface it so we
+    // can diagnose without digging through Vercel logs
+    const errorDesc = url.searchParams.get("error_description");
+    const fullMsg = errorDesc
+      ? `${cfg.provider}: ${errorParam} — ${errorDesc.slice(0, 250)}`
+      : `${cfg.provider}: ${errorParam}`;
     return NextResponse.redirect(
-      new URL(
-        `/login?error=${encodeURIComponent(`${cfg.provider}: ${errorParam}`)}`,
-        req.url,
-      ),
+      new URL(`/login?error=${encodeURIComponent(fullMsg)}`, req.url),
     );
   }
   if (!code || !stateParam) {
