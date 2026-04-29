@@ -35,6 +35,9 @@ enum ChannelType {
 
 enum OrderStatus {
   DRAFT           // rep is filling it in
+  QUOTE_REQUESTED // customer asked for custom pricing — admin must respond
+  QUOTE_PROVIDED  // admin set the price; customer must accept or reject
+  QUOTE_REJECTED  // customer declined the quote (analytics/follow-up only)
   IN_PREP         // sent to mail production (AccuZIP)
   PROOF_READY     // merge proof uploaded, awaiting customer approval
   APPROVED        // customer approved + payment captured
@@ -480,6 +483,18 @@ model Order {
   mailerTemplateId     String?
   // Optional custom per-recipient field ("offer text", etc.) user typed during order creation
   customOffer          String?
+
+  // ── Custom Quote flow ───────────────────────────────────────────────
+  // When a customer requests a custom price (oversized mailer, specialty
+  // stock, weird quantity, etc.) instead of picking a stock template:
+  isCustomQuote          Boolean   @default(false)
+  customQuoteRequest     String?   // free-text: what they want
+  customQuoteUrgency     String?   // "standard" | "rush" | "emergency"
+  customQuoteTargetDate  DateTime? @db.Date  // their desired drop date
+  customQuoteProvidedAt  DateTime? // when admin entered the price
+  customQuoteProvidedBy  String?   // admin user id
+  customQuoteRejectedAt  DateTime? // when customer rejected the quote
+  customQuoteRejectReason String?  // optional reason from customer
 
   // ── Final Quantity Reconciliation ────────────────────────────────────
   // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is

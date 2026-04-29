@@ -86,6 +86,10 @@ export default function NewOrderPage() {
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  // Custom Quote path — customer skips template pricing entirely
+  const [useCustomQuote, setUseCustomQuote] = useState(false);
+  const [customQuoteRequest, setCustomQuoteRequest] = useState("");
+  const [customQuoteUrgency, setCustomQuoteUrgency] = useState("standard");
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignId, setCampaignId] = useState("");
@@ -108,8 +112,9 @@ export default function NewOrderPage() {
   const totalPrice =
     selectedTemplate && rowCount ? rowCount * selectedTemplate.pricePerPiece : 0;
 
-  const canSubmit =
-    !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
+  const canSubmit = useCustomQuote
+    ? !!campaignId && customQuoteRequest.trim().length >= 10
+    : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
 
   const handleFile = async (file: File) => {
     setParseErr(null);
@@ -139,24 +144,38 @@ export default function NewOrderPage() {
   };
 
   const submit = async () => {
-    if (!canSubmit || !selectedTemplate) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     setSubmitErr(null);
     try {
-      // Create Order
+      // Create Order — branches by useCustomQuote
+      const orderBody = useCustomQuote
+        ? {
+            campaignId,
+            description: `Custom quote request: ${customQuoteRequest.slice(0, 80)}`,
+            quantity: rowCount || 0,
+            dropDate,
+            isCustomQuote: true,
+            customQuoteRequest,
+            customQuoteUrgency,
+            customQuoteTargetDate: dropDate,
+            status: "QUOTE_REQUESTED",
+          }
+        : {
+            campaignId,
+            description: `${selectedTemplate!.name} — self-service order`,
+            quantity: rowCount,
+            dropDate,
+            mailClass: "Marketing Mail",
+            mailShape: selectedTemplate!.category,
+            pricePerPiece: selectedTemplate!.pricePerPiece,
+            totalPrice,
+          };
+
       const r = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          campaignId,
-          description: `${selectedTemplate.name} — self-service order`,
-          quantity: rowCount,
-          dropDate,
-          mailClass: "Marketing Mail",
-          mailShape: selectedTemplate.category,
-          pricePerPiece: selectedTemplate.pricePerPiece,
-          totalPrice,
-        }),
+        body: JSON.stringify(orderBody),
       });
       if (!r.ok) {
         const d = await r.json();
@@ -164,15 +183,17 @@ export default function NewOrderPage() {
       }
       const order = await r.json();
 
-      // Attach list + mapping + template
-      await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mailingListUrl: fileUrl,
-          mailingListFileName: fileName,
-        }),
-      });
+      // Attach list + mapping (skip if no list yet for custom quote)
+      if (fileUrl) {
+        await fetch(`/api/orders/${order.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mailingListUrl: fileUrl,
+            mailingListFileName: fileName,
+          }),
+        });
+      }
 
       router.push(`/dashboard/orders/${order.id}`);
     } catch (e) {
@@ -359,21 +380,57 @@ export default function NewOrderPage() {
       </Card>
 
       {/* STEP 2: PICK TEMPLATE */}
-      <Card className={!sheet ? "opacity-60 pointer-events-none" : ""}>
+      <Card className={!sheet && !useCustomQuote ? "opacity-60 pointer-events-none" : ""}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <span
               className={`flex items-center justify-center h-6 w-6 rounded-full text-white text-xs font-bold ${
-                selectedTemplate ? "bg-brand-600" : "bg-gray-400"
+                selectedTemplate || useCustomQuote ? "bg-brand-600" : "bg-gray-400"
               }`}
             >
               2
             </span>
-            Pick a template
+            Pick a template — or request a custom quote
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Custom Quote tile — sits on the left */}
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomQuote(true);
+                setSelectedTemplate(null);
+              }}
+              className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
+                useCustomQuote
+                  ? "border-violet-500 ring-2 ring-violet-200"
+                  : "border-violet-200 hover:border-violet-400"
+              } bg-gradient-to-br from-violet-50 to-white`}
+            >
+              <div className="aspect-[3/2] flex flex-col items-center justify-center p-4 text-center">
+                <div className="text-3xl mb-2">✨</div>
+                <div className="text-sm font-semibold text-violet-900">
+                  Custom Quote
+                </div>
+                <div className="text-xs text-violet-700 mt-1 leading-snug px-2">
+                  Oversized mailer? Specialty stock? Odd quantity? Tell us what you
+                  need — we&rsquo;ll price it for you within 1 business day.
+                </div>
+              </div>
+              <div className="p-3 bg-white border-t border-violet-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-violet-900">
+                    Tell us what you need
+                  </div>
+                  {useCustomQuote && <CheckCircle2 className="h-4 w-4 text-violet-600" />}
+                </div>
+                <div className="text-xs text-violet-700 mt-0.5">
+                  Custom pricing · we respond &lt; 1 business day
+                </div>
+              </div>
+            </button>
+
             {templates.map((t) => {
               const previewData =
                 sheet && sheet.rows[0]
@@ -395,7 +452,10 @@ export default function NewOrderPage() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setSelectedTemplate(t)}
+                  onClick={() => {
+                    setSelectedTemplate(t);
+                    setUseCustomQuote(false);
+                  }}
                   className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
                     isSelected
                       ? "border-brand-500 ring-2 ring-brand-200"
@@ -431,11 +491,63 @@ export default function NewOrderPage() {
               />
             </div>
           )}
+
+          {/* Custom Quote request form — appears when the Custom Quote tile is selected */}
+          {useCustomQuote && (
+            <div className="mt-4 space-y-3 rounded-lg border-2 border-violet-200 bg-violet-50/30 p-4">
+              <div className="text-sm font-semibold text-violet-900">
+                Tell us about your custom job
+              </div>
+              <div>
+                <label className="text-xs font-medium text-violet-900 mb-1 block">
+                  What do you need? *
+                </label>
+                <textarea
+                  className="w-full min-h-[100px] rounded-md border border-violet-300 px-3 py-2 text-sm bg-white"
+                  placeholder="e.g. 6x11 oversized postcard, 16pt cardstock, gloss coating, ~3,500 pieces. First-class postage. We'd like the design to match our website (https://example.com). Open to your design suggestions if helpful."
+                  value={customQuoteRequest}
+                  onChange={(e) => setCustomQuoteRequest(e.target.value)}
+                />
+                <div className="text-[11px] text-violet-700 mt-1">
+                  More detail = faster quote. Mention size, paper, quantity, postage class,
+                  finishing (foil, die-cut, fold), and target drop date if you have one.
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-violet-900 mb-1 block">
+                  Urgency
+                </label>
+                <select
+                  className="w-full h-10 rounded-md border border-violet-300 px-3 text-sm bg-white"
+                  value={customQuoteUrgency}
+                  onChange={(e) => setCustomQuoteUrgency(e.target.value)}
+                >
+                  <option value="standard">Standard — quote within 1 business day</option>
+                  <option value="rush">Rush — need quote today</option>
+                  <option value="emergency">Emergency — need to drop ASAP</option>
+                </select>
+              </div>
+
+              <div className="text-xs text-violet-800 bg-white rounded p-2 border border-violet-200">
+                <strong>What happens next:</strong> your C&amp;D rep gets a notification,
+                builds a price (potentially with our estimating team), and sends it back.
+                You&rsquo;ll get an email when it&rsquo;s ready to review. No charge until
+                you accept the quote and approve the proof.
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* STEP 3: PRICE + DROP DATE + SUBMIT */}
-      <Card className={!sheet || !selectedTemplate ? "opacity-60 pointer-events-none" : ""}>
+      <Card
+        className={
+          (!sheet && !useCustomQuote) || (!selectedTemplate && !useCustomQuote)
+            ? "opacity-60 pointer-events-none"
+            : ""
+        }
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <span
@@ -477,39 +589,75 @@ export default function NewOrderPage() {
             </div>
             <div>
               <label className="text-xs text-gray-600 mb-1 flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Estimated total
+                <DollarSign className="h-3 w-3" />{" "}
+                {useCustomQuote ? "Total (from C&D)" : "Estimated total"}
               </label>
               <div className="h-9 flex items-center font-bold text-xl">
-                ${totalPrice.toFixed(2)}
+                {useCustomQuote ? (
+                  <span className="text-violet-700 text-sm font-medium">
+                    Quote pending
+                  </span>
+                ) : (
+                  `$${totalPrice.toFixed(2)}`
+                )}
               </div>
             </div>
           </div>
 
-          {/* Summary box */}
-          <div className="rounded-xl bg-gradient-to-r from-brand-50 to-emerald-50 border border-brand-200 p-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <div className="text-xs text-gray-600">Recipients</div>
-                <div className="font-bold text-lg">{rowCount.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-600">Template</div>
-                <div className="font-medium text-sm truncate">
-                  {selectedTemplate?.name ?? "—"}
+          {/* Summary box — different for the two paths */}
+          {useCustomQuote ? (
+            <div className="rounded-xl bg-gradient-to-r from-violet-50 to-white border border-violet-200 p-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-xs text-gray-600">Recipients</div>
+                  <div className="font-bold text-lg">
+                    {rowCount > 0 ? rowCount.toLocaleString() : "TBD"}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-600">Price per piece</div>
-                <div className="font-medium">
-                  ${selectedTemplate?.pricePerPiece.toFixed(2) ?? "—"}
+                <div>
+                  <div className="text-xs text-gray-600">Job type</div>
+                  <div className="font-medium text-sm">Custom Quote</div>
                 </div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-600">Total</div>
-                <div className="font-bold text-lg">${totalPrice.toFixed(2)}</div>
+                <div>
+                  <div className="text-xs text-gray-600">Urgency</div>
+                  <div className="font-medium text-sm capitalize">
+                    {customQuoteUrgency}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-600">Price</div>
+                  <div className="font-medium text-violet-700">
+                    Pending quote
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl bg-gradient-to-r from-brand-50 to-emerald-50 border border-brand-200 p-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-xs text-gray-600">Recipients</div>
+                  <div className="font-bold text-lg">{rowCount.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-600">Template</div>
+                  <div className="font-medium text-sm truncate">
+                    {selectedTemplate?.name ?? "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-600">Price per piece</div>
+                  <div className="font-medium">
+                    ${selectedTemplate?.pricePerPiece.toFixed(2) ?? "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-600">Total</div>
+                  <div className="font-bold text-lg">${totalPrice.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!campaignId && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 flex items-start gap-2">
@@ -529,20 +677,27 @@ export default function NewOrderPage() {
 
           <div className="flex items-center justify-end gap-3">
             <div className="text-xs text-gray-500 flex-1">
-              Submitting creates your order. Your C&amp;D rep will review the proof with you and
-              then we&rsquo;ll charge your card on file.
+              {useCustomQuote
+                ? "Submitting sends your request to your C&D rep. You'll get an email when the quote is ready."
+                : "Submitting creates your order. Your C&D rep will review the proof with you and then we'll charge your card on file."}
             </div>
             <Button
               size="lg"
               disabled={!canSubmit || submitting}
               onClick={submit}
-              className="bg-brand-600 hover:bg-brand-700"
+              className={
+                useCustomQuote
+                  ? "bg-violet-600 hover:bg-violet-700"
+                  : "bg-brand-600 hover:bg-brand-700"
+              }
             >
-              {submitting ? "Submitting…" : (
-                <>
-                  Submit Order <ArrowRight className="h-4 w-4 ml-1" />
-                </>
-              )}
+              {submitting
+                ? useCustomQuote ? "Sending request…" : "Submitting…"
+                : useCustomQuote ? (
+                    <>Request Quote <ArrowRight className="h-4 w-4 ml-1" /></>
+                  ) : (
+                    <>Submit Order <ArrowRight className="h-4 w-4 ml-1" /></>
+                  )}
             </Button>
           </div>
         </CardContent>

@@ -59,9 +59,6 @@ async function main() {
         usedAt: null,
         expiresAt: { gt: new Date() },
       },
-      include: {
-        // Hand-link company to verify it's active
-      },
       orderBy: { createdAt: "desc" },
     });
 

@@ -56,6 +56,14 @@ interface OrderDetail {
   cleansedListRowCount: number | null;
   stripeRefundId: string | null;
   stripeRefundAmount: number | null;
+  // Custom Quote
+  isCustomQuote: boolean;
+  customQuoteRequest: string | null;
+  customQuoteUrgency: string | null;
+  customQuoteTargetDate: string | null;
+  customQuoteProvidedAt: string | null;
+  customQuoteRejectedAt: string | null;
+  customQuoteRejectReason: string | null;
   company: {
     id: string;
     name: string;
@@ -86,6 +94,18 @@ interface SessionUser {
 
 const STATUS_FLOW = [
   { key: "DRAFT", label: "Draft" },
+  { key: "IN_PREP", label: "In Prep" },
+  { key: "PROOF_READY", label: "Proof Ready" },
+  { key: "APPROVED", label: "Approved" },
+  { key: "DROPPED", label: "Dropped" },
+  { key: "DELIVERING", label: "Delivering" },
+  { key: "COMPLETE", label: "Complete" },
+];
+
+// For custom-quote orders, the lifecycle is prefixed with two extra steps.
+const QUOTE_FLOW = [
+  { key: "QUOTE_REQUESTED", label: "Quote Requested" },
+  { key: "QUOTE_PROVIDED", label: "Quote Provided" },
   { key: "IN_PREP", label: "In Prep" },
   { key: "PROOF_READY", label: "Proof Ready" },
   { key: "APPROVED", label: "Approved" },
@@ -170,7 +190,8 @@ export default function OrderDetailPage() {
     return <div className="flex items-center justify-center h-96 text-gray-500">Loading…</div>;
   }
 
-  const activeStep = STATUS_FLOW.findIndex((s) => s.key === order.status);
+  const flow = order.isCustomQuote ? QUOTE_FLOW : STATUS_FLOW;
+  const activeStep = flow.findIndex((s) => s.key === order.status);
 
   return (
     <div className="space-y-6">
@@ -234,7 +255,7 @@ export default function OrderDetailPage() {
       <Card>
         <CardContent className="py-5">
           <div className="flex items-center gap-2 overflow-x-auto">
-            {STATUS_FLOW.map((step, i) => {
+            {flow.map((step, i) => {
               const isActive = i === activeStep;
               const isComplete = i < activeStep;
               return (
@@ -261,7 +282,7 @@ export default function OrderDetailPage() {
                   >
                     {step.label}
                   </span>
-                  {i < STATUS_FLOW.length - 1 && (
+                  {i < flow.length - 1 && (
                     <div className={`h-px w-6 ${isComplete ? "bg-emerald-500" : "bg-gray-200"}`} />
                   )}
                 </div>
@@ -270,6 +291,17 @@ export default function OrderDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Custom Quote Card — only renders for custom-quote orders */}
+      {order.isCustomQuote && (
+        <CustomQuoteCard
+          order={order}
+          isAdmin={isAdmin}
+          isCustomer={isCustomer}
+          orderId={id!}
+          onUpdate={reload}
+        />
+      )}
 
       {/* Mailing List */}
       <Card>
@@ -1306,6 +1338,258 @@ function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode:
           <div className="rounded-md bg-rose-50 border border-rose-200 p-3 text-sm text-rose-900">
             <div className="font-semibold">Upload failed</div>
             <div className="mt-0.5 text-xs">{err}</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Custom Quote card — handles the QUOTE_REQUESTED → QUOTE_PROVIDED → IN_PREP
+ * (or QUOTE_REJECTED) handshake.
+ */
+function CustomQuoteCard({
+  order,
+  isAdmin,
+  isCustomer,
+  orderId,
+  onUpdate,
+}: {
+  order: OrderDetail;
+  isAdmin: boolean;
+  isCustomer: boolean;
+  orderId: string;
+  onUpdate: () => void;
+}) {
+  const [pricePerPiece, setPricePerPiece] = useState(
+    order.pricePerPiece?.toString() ?? "",
+  );
+  const [setupFee, setSetupFee] = useState(order.setupFee?.toString() ?? "0");
+  const [quoteNotes, setQuoteNotes] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+
+  const qty = order.quantity || 0;
+  const previewTotal =
+    pricePerPiece && qty
+      ? +(parseFloat(pricePerPiece) * qty + (parseFloat(setupFee) || 0)).toFixed(2)
+      : null;
+
+  const callQuoteApi = async (
+    action: "provide" | "accept" | "reject",
+    extra: Record<string, unknown> = {},
+  ) => {
+    setBusy(action);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setErr(d.error ?? `Failed to ${action}`);
+        return;
+      }
+      onUpdate();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card className="border-violet-200 bg-gradient-to-br from-violet-50/50 to-white">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-violet-900">
+          ✨ Custom Quote
+          <Badge className="ml-2 bg-violet-100 text-violet-700 capitalize">
+            {order.status.toLowerCase().replace(/_/g, " ")}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-gray-700 mb-1">
+            Customer&rsquo;s request
+          </div>
+          <div className="rounded-md bg-white border border-violet-200 p-3 text-sm whitespace-pre-wrap">
+            {order.customQuoteRequest ?? "(no description provided)"}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+            {order.customQuoteUrgency && (
+              <span>Urgency: <strong className="capitalize text-gray-900">{order.customQuoteUrgency}</strong></span>
+            )}
+            {order.customQuoteTargetDate && (
+              <span>Target drop: <strong className="text-gray-900">{new Date(order.customQuoteTargetDate).toLocaleDateString()}</strong></span>
+            )}
+            {qty > 0 && (
+              <span>Approximate qty: <strong className="text-gray-900">{qty.toLocaleString()}</strong></span>
+            )}
+          </div>
+        </div>
+
+        {order.customQuoteProvidedAt && order.pricePerPiece != null && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <div className="text-xs font-semibold text-emerald-900 mb-2">
+              Quote provided {new Date(order.customQuoteProvidedAt).toLocaleString()}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div>
+                <div className="text-xs text-emerald-700">Price / piece</div>
+                <div className="font-bold">${order.pricePerPiece.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-emerald-700">Setup fee</div>
+                <div className="font-bold">${(order.setupFee ?? 0).toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-emerald-700">Quantity</div>
+                <div className="font-bold">{qty.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-emerald-700">Total</div>
+                <div className="font-bold text-lg">${(order.totalPrice ?? 0).toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isAdmin && order.status === "QUOTE_REQUESTED" && (
+          <div className="rounded-lg border border-violet-200 bg-white p-4 space-y-3">
+            <div className="text-sm font-semibold text-violet-900">Send the quote</div>
+            <div className="text-xs text-gray-600">
+              Run the request by Mary if needed; once you have her price, enter it
+              below. Customer gets a branded email with Accept / Reject options.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Quantity</label>
+                <Input type="number" value={qty} disabled className="bg-gray-50" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Price per piece *</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 0.85"
+                  value={pricePerPiece}
+                  onChange={(e) => setPricePerPiece(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Setup fee</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={setupFee}
+                  onChange={(e) => setSetupFee(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">
+                Notes for the customer (optional)
+              </label>
+              <textarea
+                className="w-full min-h-[60px] rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="e.g. Includes 16pt cardstock, gloss UV coating, First-Class postage."
+                value={quoteNotes}
+                onChange={(e) => setQuoteNotes(e.target.value)}
+              />
+            </div>
+            {previewTotal !== null && (
+              <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm flex items-center justify-between">
+                <span className="text-emerald-800">Customer will see:</span>
+                <span className="font-bold text-emerald-900">${previewTotal.toFixed(2)}</span>
+              </div>
+            )}
+            {err && (
+              <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">{err}</div>
+            )}
+            <Button
+              onClick={() =>
+                callQuoteApi("provide", {
+                  pricePerPiece: parseFloat(pricePerPiece),
+                  setupFee: parseFloat(setupFee) || 0,
+                  notes: quoteNotes,
+                })
+              }
+              disabled={busy === "provide" || !pricePerPiece}
+              className="bg-violet-600 hover:bg-violet-700 text-white w-full"
+            >
+              {busy === "provide" ? "Sending quote…" : "Send Quote to Customer"}
+            </Button>
+          </div>
+        )}
+
+        {isCustomer && order.status === "QUOTE_PROVIDED" && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+            <div className="text-sm font-semibold text-emerald-900">Ready to move forward?</div>
+            <div className="text-xs text-emerald-800">
+              Accepting moves your order into production. We&rsquo;ll send you a merge
+              proof to approve before anything mails — no charge until you approve.
+            </div>
+            {err && (
+              <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">{err}</div>
+            )}
+            {!showReject ? (
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => callQuoteApi("accept")}
+                  disabled={busy === "accept"}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+                >
+                  {busy === "accept" ? "Accepting…" : "Accept Quote"}
+                </Button>
+                <Button variant="outline" onClick={() => setShowReject(true)}>Decline</Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  className="w-full min-h-[60px] rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="Optional: tell us why — helps us serve you better next time."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => callQuoteApi("reject", { reason: rejectReason })}
+                    disabled={busy === "reject"}
+                    className="bg-rose-600 hover:bg-rose-700 text-white flex-1"
+                  >
+                    {busy === "reject" ? "Submitting…" : "Confirm Decline"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowReject(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isCustomer && order.status === "QUOTE_REQUESTED" && (
+          <div className="rounded-md bg-violet-50 border border-violet-200 p-3 text-sm text-violet-900 flex items-start gap-2">
+            <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-medium">Quote pending</div>
+              <div className="text-xs mt-0.5">
+                Your C&amp;D rep is working on your price. We&rsquo;ll email you the
+                moment it&rsquo;s ready — usually within 1 business day.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {order.status === "QUOTE_REJECTED" && (
+          <div className="rounded-md bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
+            <div className="font-medium">Quote declined</div>
+            {order.customQuoteRejectReason && (
+              <div className="text-xs mt-1">{order.customQuoteRejectReason}</div>
+            )}
           </div>
         )}
       </CardContent>
