@@ -24,6 +24,7 @@ interface Company {
   name: string;
   slug: string;
   industry: string | null;
+  isActive?: boolean;
   externalCustomerId?: string | null;
   users?: { email: string; name: string | null }[];
 }
@@ -42,14 +43,36 @@ export default function AdminCompaniesPage() {
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [showArchived, setShowArchived] = useState(false);
+
   const load = () =>
-    fetch("/api/companies")
+    fetch(`/api/companies${showArchived ? "?includeArchived=true" : ""}`)
       .then((r) => r.json())
       .then((d) => setCompanies(d.companies ?? []));
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
+
+  const archive = async (c: Company) => {
+    if (!confirm(`Archive "${c.name}"? They'll be hidden from dropdowns + reports. Reversible.`)) return;
+    await fetch(`/api/companies/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: false }),
+    });
+    load();
+  };
+
+  const restore = async (c: Company) => {
+    await fetch(`/api/companies/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: true }),
+    });
+    load();
+  };
 
   const create = async () => {
     if (!form.name) {
@@ -100,10 +123,21 @@ export default function AdminCompaniesPage() {
             <p className="text-sm text-gray-500">Manage customer accounts</p>
           </div>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Add Customer
-        </Button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="rounded"
+            />
+            Show archived
+          </label>
+          <Button onClick={() => setShowForm(!showForm)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -242,6 +276,7 @@ export default function AdminCompaniesPage() {
                 <th>Godzilla</th>
                 <th className="text-right">Users</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -267,7 +302,27 @@ export default function AdminCompaniesPage() {
                   </td>
                   <td className="text-right">{c.users?.length ?? 0}</td>
                   <td>
-                    <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+                    {c.isActive === false ? (
+                      <Badge className="bg-gray-100 text-gray-600">Archived</Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+                    )}
+                  </td>
+                  <td className="text-right pr-4">
+                    {c.isActive === false ? (
+                      <Button size="sm" variant="outline" onClick={() => restore(c)}>
+                        Restore
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => archive(c)}
+                        className="text-gray-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
+                      >
+                        Archive
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

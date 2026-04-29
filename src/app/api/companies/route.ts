@@ -45,8 +45,10 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const url = new URL(req.url);
+  const includeArchived = url.searchParams.get("includeArchived") === "true";
   const companies = await prisma.company.findMany({
-    where: { isActive: true },
+    where: includeArchived ? {} : { isActive: true },
     orderBy: { name: "asc" },
     select: {
       id: true,
