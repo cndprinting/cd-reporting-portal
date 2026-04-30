@@ -40,6 +40,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { DropZone } from "@/components/ui/dropzone";
 
 interface Campaign {
   id: string;
@@ -300,27 +301,22 @@ export default function NewOrderPage() {
                 </a>
               </div>
 
-              <label
-                className={`block border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
-                  uploading
-                    ? "opacity-60 pointer-events-none"
-                    : "border-gray-300 hover:border-brand-400 hover:bg-brand-50"
-                }`}
+              <DropZone
+                accept=".csv,.xlsx,.xls,.txt,text/csv"
+                disabled={uploading}
+                onFile={handleFile}
+                tone="brand"
+                className="p-10"
               >
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls,.txt,text/csv"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
                 <FileSpreadsheet className="h-10 w-10 text-gray-400 mx-auto mb-3" />
                 <div className="text-base font-semibold text-gray-900">
                   Drop your filled-in spreadsheet here
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  CSV, XLSX, or TXT · if you used our template, columns auto-match
+                  CSV, XLSX, or TXT · or click to browse · if you used our template,
+                  columns auto-match
                 </div>
-              </label>
+              </DropZone>
             </div>
           ) : (
             <div className="space-y-4">

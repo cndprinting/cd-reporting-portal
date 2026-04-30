@@ -26,6 +26,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { DropZone } from "@/components/ui/dropzone";
 import Link from "next/link";
 
 interface OrderDetail {
@@ -763,24 +764,19 @@ function ProofUploader({
       />
 
       {mode === "upload" ? (
-        <label
-          className={`block border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-            uploading ? "opacity-60 pointer-events-none" : "border-gray-300 hover:border-brand-400 hover:bg-brand-50"
-          }`}
+        <DropZone
+          accept="application/pdf,image/*"
+          disabled={uploading}
+          onFile={handleUploadFile}
+          tone="brand"
+          className="p-4"
         >
-          <input
-            type="file"
-            accept="application/pdf,image/*"
-            className="hidden"
-            disabled={uploading}
-            onChange={(e) => e.target.files?.[0] && handleUploadFile(e.target.files[0])}
-          />
           <Upload className="h-6 w-6 text-gray-400 mx-auto mb-1" />
           <div className="text-xs font-medium text-gray-700">
-            {uploading ? "Uploading…" : "Click to upload PDF or image"}
+            {uploading ? "Uploading…" : "Drop PDF or image here, or click to browse"}
           </div>
           <div className="text-[10px] text-gray-400 mt-0.5">Max 20 MB</div>
-        </label>
+        </DropZone>
       ) : (
         <div className="space-y-2">
           <Input
@@ -856,28 +852,21 @@ function MailingListUploader({
 
   return (
     <div className="space-y-2">
-      <label
-        className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-          uploading
-            ? "opacity-60 pointer-events-none"
-            : "border-gray-300 hover:border-emerald-400 hover:bg-emerald-50"
-        }`}
+      <DropZone
+        accept=".csv,.xlsx,.xls,.txt,text/csv"
+        disabled={uploading}
+        onFile={handle}
+        tone="emerald"
+        className="p-6"
       >
-        <input
-          type="file"
-          accept=".csv,.xlsx,.xls,.txt,text/csv"
-          className="hidden"
-          disabled={uploading}
-          onChange={(e) => e.target.files?.[0] && handle(e.target.files[0])}
-        />
         <FileSpreadsheet className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
         <div className="text-sm font-medium text-gray-700">
-          {uploading ? "Uploading list…" : "Click to upload recipient list"}
+          {uploading ? "Uploading list…" : "Drop recipient list here, or click to browse"}
         </div>
         <div className="text-xs text-gray-400 mt-1">
           CSV, XLSX, or TXT · max 20 MB
         </div>
-      </label>
+      </DropZone>
       {err && (
         <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
           {err}
@@ -1174,28 +1163,21 @@ function FinalQuantityCard({
                 </Button>
               </div>
             ) : (
-              <label
-                className={`block rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${
-                  uploading
-                    ? "border-gray-300 bg-gray-50"
-                    : "border-gray-300 hover:border-sky-400 hover:bg-sky-50"
-                }`}
+              <DropZone
+                accept=".csv,.xlsx,.txt"
+                disabled={uploading}
+                onFile={uploadCleansedList}
+                tone="sky"
+                className="p-4"
               >
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".csv,.xlsx,.txt"
-                  disabled={uploading}
-                  onChange={(e) => e.target.files?.[0] && uploadCleansedList(e.target.files[0])}
-                />
                 <Upload className="h-6 w-6 text-sky-500 mx-auto mb-1" />
                 <div className="text-sm font-medium text-gray-700">
-                  {uploading ? "Uploading…" : "Upload cleansed list (optional)"}
+                  {uploading ? "Uploading…" : "Drop cleansed list here, or click to browse (optional)"}
                 </div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   AccuZIP output · CSV / XLSX / TXT · row count auto-populates
                 </div>
-              </label>
+              </DropZone>
             )}
 
             {err && (
@@ -1309,29 +1291,22 @@ function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode:
             </Button>
           </div>
         ) : (
-          <label
-            className={`block rounded-lg border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
-              uploading
-                ? "border-gray-300 bg-gray-50 pointer-events-none opacity-60"
-                : "border-gray-300 hover:border-violet-400 hover:bg-violet-50"
-            }`}
+          <DropZone
+            accept=".zip,.pbc"
+            disabled={uploading}
+            onFile={upload}
+            tone="violet"
+            className="p-5"
           >
-            <input
-              type="file"
-              className="hidden"
-              accept=".zip,.pbc"
-              disabled={uploading}
-              onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
-            />
             <Upload className="h-7 w-7 text-violet-500 mx-auto mb-2" />
             <div className="text-sm font-medium text-gray-700">
-              {uploading ? "Parsing Mail.dat…" : "Drop Presort folder ZIP or maildat.pbc"}
+              {uploading ? "Parsing Mail.dat…" : "Drop Presort ZIP or maildat.pbc here, or click to browse"}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">
               Accepts <code className="bg-gray-100 px-1 rounded">.zip</code> or{" "}
               <code className="bg-gray-100 px-1 rounded">.pbc</code> · max 50 MB
             </div>
-          </label>
+          </DropZone>
         )}
 
         {err && (

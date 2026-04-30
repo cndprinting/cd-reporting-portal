@@ -1,18 +1,33 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #1e40af;
-  --color-brand-700: #1d3a8a;
-  --color-brand-800: #1e3a6e;
-  --color-brand-900: #172554;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* MailerCity terracotta — replaces sky blue. Every existing
+     bg-brand-/text-brand-/ring-brand- class now picks up these tones. */
+  --color-brand-50: #FBF1EC;
+  --color-brand-100: #F4DDD2;
+  --color-brand-200: #ECC4B0;
+  --color-brand-300: #DBA388;
+  --color-brand-400: #CB7E5E;
+  --color-brand-500: #B85C3D;
+  --color-brand-600: #A04930;
+  --color-brand-700: #823724;
+  --color-brand-800: #6B2C1D;
+  --color-brand-900: #4F1F14;
+
+  /* Editorial neutrals — warm cream paper, ink for text */
+  --color-paper: #FAF7F2;
+  --color-paper-soft: #F2EDE4;
+  --color-ink: #1A1814;
+  --color-ink-soft: #3A352D;
+  --color-stone: #6B6660;
+  --color-line: #E8E0D2;
+  --color-line-soft: #F0E9DC;
+  --color-affirm: #2D5F4F;
+  --color-affirm-soft: #DDE7E0;
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 }
 
 @keyframes fade-in-0 {
