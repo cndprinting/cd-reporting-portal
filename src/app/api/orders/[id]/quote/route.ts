@@ -125,13 +125,8 @@ ${body.notes ? `<div style="background:#f5f3ff;border-left:3px solid #8b5cf6;pad
       where: { id },
       data: { status: "IN_PREP" },
     });
-    // Now that the customer accepted, fire the production handoff email
-    // (only if the order has a list attached — sometimes custom-quote
-    // orders are pure pricing exploration with no list yet)
-    if (order.mailingListUrl) {
-      const { notifyProduction } = await import("@/lib/services/production-notify");
-      notifyProduction(id).catch(() => {});
-    }
+    // Production handoff is manual now — order shows up on the
+    // /dashboard/admin/production-queue page once it has a list attached.
     return NextResponse.json({ ok: true });
   }
 

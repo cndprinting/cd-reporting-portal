@@ -1,13 +1,12 @@
 /**
- * Production handoff email — pings Tom (prepress) when an order is ready to
- * be processed in AccuZIP.
- *
- * Idempotent — sets `Order.productionNotifiedAt` after success so we don't
- * double-email if a customer or admin re-saves the order.
+ * Production handoff email — admin manually sends an order to one or more
+ * C&D production team members.
  *
  * Triggered from:
- *   - PATCH /api/orders/:id when mailingListUrl gets set (standard flow)
- *   - POST /api/orders/:id/quote action="accept" (custom quote acceptance)
+ *   - POST /api/orders/:id/send-to-production (admin clicks "Send to
+ *     Production" on the queue page or order detail page)
+ *
+ * Logs every send to ProductionHandoff for audit trail.
  */
 
 import prisma from "@/lib/prisma";
@@ -15,8 +14,22 @@ import { sendEmail } from "./email";
 
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://marketing.cndprinting.com";
 
-export async function notifyProduction(orderId: string): Promise<void> {
-  if (!prisma) return;
+/**
+ * Default recipients — pulled from PRODUCTION_NOTIFY_EMAIL env var. Used
+ * to pre-fill the "Send to Production" modal. Admin can override per-send.
+ */
+export function getDefaultProductionRecipients(): string[] {
+  return (process.env.PRODUCTION_NOTIFY_EMAIL ?? "tcamp@cndprinting.com")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export async function notifyProduction(
+  orderId: string,
+  options: { recipients: string[]; notes?: string; sentByUserId: string },
+): Promise<{ ok: boolean; error?: string; recipients: string[] }> {
+  if (!prisma) return { ok: false, error: "db unavailable", recipients: [] };
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -25,16 +38,12 @@ export async function notifyProduction(orderId: string): Promise<void> {
       campaign: { select: { name: true, campaignCode: true } },
     },
   });
-  if (!order) return;
-  if (order.productionNotifiedAt) return; // already sent
+  if (!order) return { ok: false, error: "order not found", recipients: [] };
 
-  const recipients = (
-    process.env.PRODUCTION_NOTIFY_EMAIL ?? "tcamp@cndprinting.com"
-  )
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (recipients.length === 0) return;
+  const recipients = options.recipients.map((r) => r.trim()).filter(Boolean);
+  if (recipients.length === 0) {
+    return { ok: false, error: "no recipients provided", recipients: [] };
+  }
 
   const dropDate = order.dropDate
     ? new Date(order.dropDate).toLocaleDateString()
@@ -72,6 +81,15 @@ ${
 </div>`
 }
 
+${
+    options.notes
+      ? `<div style="background:#fefce8;border-left:4px solid #eab308;padding:14px;margin:20px 0;border-radius:4px;">
+<div style="font-size:12px;font-weight:600;color:#713f12;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Note from sender</div>
+<div style="font-size:14px;color:#422006;white-space:pre-wrap;">${String(options.notes).slice(0, 1500)}</div>
+</div>`
+      : ""
+  }
+
 <div style="background:#eff6ff;border-left:4px solid #3b82f6;padding:14px;margin:20px 0;border-radius:4px;">
 <div style="font-size:13px;font-weight:600;color:#1e40af;margin-bottom:6px;">📋 When you're done with AccuZIP:</div>
 <div style="font-size:13px;color:#1e3a8a;line-height:1.7;">
@@ -99,9 +117,22 @@ C&amp;D Marketing Portal · ${order.orderCode} · ${new Date().toLocaleDateStrin
   });
 
   if (send.ok) {
+    // Log the handoff for audit + dashboard visibility
+    await prisma.productionHandoff.create({
+      data: {
+        orderId,
+        recipients: recipients.join(", "),
+        notes: options.notes ?? null,
+        sentByUserId: options.sentByUserId,
+      },
+    });
+    // Mirror on the order for fast filtering
     await prisma.order.update({
       where: { id: orderId },
       data: { productionNotifiedAt: new Date() },
     });
+    return { ok: true, recipients };
   }
+
+  return { ok: false, error: send.error, recipients };
 }

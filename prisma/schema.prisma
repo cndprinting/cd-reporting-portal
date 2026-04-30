@@ -496,9 +496,10 @@ model Order {
   customQuoteRejectedAt  DateTime? // when customer rejected the quote
   customQuoteRejectReason String?  // optional reason from customer
 
-  // Production handoff — when we notified prepress (Tom) that this order is
-  // ready to be processed in AccuZIP. Used to avoid double-emailing.
+  // Production handoff — kept for backwards compat. The richer audit trail
+  // lives in ProductionHandoff (one row per send, multi-recipient).
   productionNotifiedAt DateTime?
+  productionHandoffs   ProductionHandoff[]
 
   // ── Final Quantity Reconciliation ────────────────────────────────────
   // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is
@@ -618,6 +619,22 @@ model MailerTemplate {
 
   @@index([category])
   @@index([isActive])
+}
+
+// -------- Production handoff log — admin manually sends an order to one or
+//          more C&D production team members. One row per send. Lets the team
+//          see "who sent CD-2026-BHLAND-001 to Tom and when" at a glance.
+model ProductionHandoff {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recipients  String   // comma-separated email list as sent
+  notes       String?  // optional admin note included in the email
+  sentByUserId String  // admin who clicked Send
+  sentAt      DateTime @default(now())
+
+  @@index([orderId])
+  @@index([sentAt])
 }
 
 // -------- SharePoint auto-import audit log — one row per file the watcher processes.
