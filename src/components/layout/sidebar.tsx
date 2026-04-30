@@ -50,6 +50,7 @@ const adminNav: NavLink[] = [
   { label: "Unknown IMbs", href: "/dashboard/admin/unknown-imbs" },
   { label: "Scan Map", href: "/dashboard/admin/scan-map" },
   { label: "Demo Tools", href: "/dashboard/admin/demo-tools" },
+  { label: "🎨 Design Preview", href: "/dashboard/admin/design-preview" },
   { label: "Scheduled Reports", href: "/dashboard/admin/reports" },
   { label: "Branding", href: "/dashboard/admin/branding" },
   { label: "Settings", href: "/dashboard/settings" },
