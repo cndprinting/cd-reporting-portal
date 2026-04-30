@@ -21,9 +21,9 @@ interface Brand {
 }
 
 const DEFAULT_BRAND: Brand = {
-  companyName: "cndprinting.com",
-  tagline: "Reporting Portal",
-  logoUrl: null,
+  companyName: "C&D Printing",
+  tagline: "MailerCity",
+  logoUrl: "/logo-icon.svg",
   primary: "#0284c7",
   accent: "#f59e0b",
   isCustomerBranded: false,

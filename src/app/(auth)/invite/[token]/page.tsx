@@ -117,7 +117,7 @@ export default function AcceptInvitePage() {
             {invite?.companyName ? (
               <strong>{invite.companyName}</strong>
             ) : (
-              "C&D Reporting Portal"
+              "MailerCity"
             )}
           </p>
         </div>

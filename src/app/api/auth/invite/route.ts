@@ -14,7 +14,7 @@ function renderInviteEmail(params: {
  <tr><td align="center">
   <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
    <tr><td style="padding:32px;background:#1e293b;color:#ffffff;">
-    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;">C&amp;D Printing Reporting Portal</div>
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;">MailerCity by C&amp;D Printing</div>
     <div style="font-size:22px;font-weight:700;margin-top:4px;">You&rsquo;ve been invited</div>
    </td></tr>
    <tr><td style="padding:32px;font-size:14px;line-height:1.6;">
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     const emailResult = await sendEmail({
       to: email,
-      subject: `You're invited to the C&D Reporting Portal`,
+      subject: `You're invited to MailerCity (C&D Printing)`,
       html: renderInviteEmail({
         inviteUrl,
         companyName: company?.name ?? null,

@@ -12,9 +12,12 @@ import { getSession } from "@/lib/session";
 export const runtime = "nodejs";
 
 const DEFAULT_BRAND = {
-  companyName: "cndprinting.com",
-  tagline: "Reporting Portal",
-  logoUrl: null as string | null,
+  companyName: "C&D Printing",
+  tagline: "MailerCity",
+  // Bundled C&D 4-square icon (red/yellow/blue/green). Same asset used in
+  // the cd-packaging Godzilla project for visual consistency across both
+  // C&D apps. CD_LOGO_URL env var can override.
+  logoUrl: (process.env.CD_LOGO_URL ?? "/logo-icon.svg") as string | null,
   primary: "#0284c7", // brand-600
   accent: "#f59e0b",
   isCustomerBranded: false,

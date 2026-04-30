@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "C&D Reporting Portal | Campaign Performance Dashboard",
-  description: "Track your direct mail and digital campaign performance across all channels with C&D Printing's reporting dashboard.",
+  title: "MailerCity by C&D Printing | Direct Mail Campaign Dashboard",
+  description: "Track direct mail campaigns end-to-end — recipient lists, USPS scan-level delivery tracking, and per-campaign reporting. Built by C&D Printing.",
 };
 
 export default function RootLayout({
