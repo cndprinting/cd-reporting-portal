@@ -301,35 +301,62 @@ export default function AutoImportPage() {
 
       {/* How it works */}
       <Card className="bg-gray-50">
-        <CardContent className="py-3 text-xs text-gray-700 space-y-2">
-          <div className="font-semibold text-gray-800">How it works</div>
-          <ol className="list-decimal list-inside space-y-1 text-xs">
-            <li>
-              Tom (or anyone with edit access) drops a Presort folder ZIP — or
-              just the <code>maildat.pbc</code> file — into the customer&rsquo;s
-              subfolder under{" "}
-              <code className="bg-white px-1 rounded">Marketing Portal Drops</code>{" "}
-              in SharePoint.
-            </li>
-            <li>
-              Cron runs daily at 7am ET (or click <strong>Run Now</strong> for
-              instant processing).
-            </li>
-            <li>
-              Watcher matches the folder name to a Company, auto-creates one if
-              new, parses every IMb, creates a MailBatch + Order in DROPPED
-              state, and imports MailPieces.
-            </li>
-            <li>
-              File moves to <code>_processed/</code> on success or{" "}
-              <code>_errors/</code> with a sibling{" "}
-              <code>.error.txt</code> on failure.
-            </li>
-            <li>
-              From here on, every USPS scan for those IMbs lands on the
-              customer&rsquo;s Mail Tracking dashboard.
-            </li>
-          </ol>
+        <CardContent className="py-3 text-xs text-gray-700 space-y-3">
+          <div>
+            <div className="font-semibold text-gray-800 mb-1">📁 How files match orders</div>
+            <div className="text-xs space-y-1">
+              <div>
+                <strong>Preferred:</strong> Tom names his ZIP{" "}
+                <code className="bg-white px-1 rounded">CD-YYYY-NAME-NNN.zip</code>{" "}
+                — the order code from the production email — and the watcher attaches
+                IMbs to that exact order. Customer&rsquo;s order lights up with tracking.
+              </div>
+              <div>
+                <strong>Examples that match:</strong>
+                <ul className="ml-4 mt-0.5 space-y-0.5">
+                  <li>✅ <code>CD-2026-BHLAND-001.zip</code></li>
+                  <li>✅ <code>CD-2026-BHLAND-001 Spring Outreach.zip</code></li>
+                  <li>✅ <code>CD-2026-BHLAND-001-final.pbc</code></li>
+                  <li>⚠️ <code>bh-march.zip</code> (no code → fallback creates a new order)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="font-semibold text-gray-800 mb-1">⚙️ Processing rules</div>
+            <ol className="list-decimal list-inside space-y-1 text-xs">
+              <li>Cron runs daily at 7am ET (or click <strong>Run Now</strong>).</li>
+              <li>
+                Each file is processed exactly once — tracked by SharePoint item
+                ID. Re-uploading the same file is harmless.
+              </li>
+              <li>
+                On success, file moves to <code>_processed/</code>. On failure,
+                file moves to <code>_errors/</code> with a sibling{" "}
+                <code>.error.txt</code> log. Customer subfolders stay tidy —
+                only files awaiting processing live there.
+              </li>
+              <li>
+                If a folder name doesn&rsquo;t match an existing customer, a new
+                Company gets auto-created. Admin can rename / merge later.
+              </li>
+              <li>
+                Files dropped in <code>_unsorted/</code> need an order code in
+                the filename to be processed; otherwise admin must move them to
+                a customer subfolder first.
+              </li>
+            </ol>
+          </div>
+
+          <div>
+            <div className="font-semibold text-gray-800 mb-1">🔁 Auditability</div>
+            <ul className="list-disc list-inside text-xs space-y-0.5">
+              <li>Every import attempt is logged in the table above</li>
+              <li>Click any &ldquo;View order →&rdquo; link to see what got imported</li>
+              <li>Failed imports keep their full error message inline for easy debugging</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </div>

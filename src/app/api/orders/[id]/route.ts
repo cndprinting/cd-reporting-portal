@@ -103,6 +103,24 @@ export async function PATCH(
     where: { id },
     data: updatable,
   });
+
+  // Fire production handoff email if the order is now ready for AccuZIP:
+  //   - has a recipient list attached
+  //   - status is "ready for production" (DRAFT for standard orders;
+  //     custom-quote orders fire from the quote-accept handler instead)
+  // Idempotent — notifyProduction() bails if productionNotifiedAt is set.
+  const productionReadyStatuses = ["DRAFT", "IN_PREP"];
+  if (
+    updated.mailingListUrl &&
+    productionReadyStatuses.includes(updated.status) &&
+    !updated.isCustomQuote // custom-quote orders use quote-accept hook instead
+  ) {
+    const { notifyProduction } = await import("@/lib/services/production-notify");
+    notifyProduction(id).catch(() => {
+      /* don't block the PATCH response on email failure */
+    });
+  }
+
   return NextResponse.json(updated);
 }
 

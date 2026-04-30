@@ -137,6 +137,44 @@ async function extractPbcText(buffer: Buffer, filename: string): Promise<string>
   return buffer.toString("utf8");
 }
 
+/**
+ * Try to extract an order code from the filename. Tom's instructed to name
+ * his Presort ZIPs with the order code as the prefix (e.g.
+ *   "CD-2026-BHLAND-001.zip"
+ *   "CD-2026-BHLAND-001 Spring outreach.zip"
+ *   "CD-2026-BHLAND-001-final.pbc"
+ * ).
+ *
+ * Returns the matched code or null. Trailing junk is fine; we just need a
+ * starts-with-CD-YYYY-NAME-NNN pattern.
+ */
+function extractOrderCodeFromFilename(filename: string): string | null {
+  const m = filename.match(/(CD-\d{4}-[A-Z0-9]+-\d{1,8})/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/**
+ * Try to find an existing Order matching the filename's order code that's
+ * waiting for production data (status DRAFT or IN_PREP). Returns the order
+ * (with its company + campaign info) or null.
+ */
+async function findExistingOrderForFile(filename: string) {
+  if (!prisma) return null;
+  const code = extractOrderCodeFromFilename(filename);
+  if (!code) return null;
+  return prisma.order.findUnique({
+    where: { orderCode: code },
+    select: {
+      id: true,
+      orderCode: true,
+      status: true,
+      companyId: true,
+      campaignId: true,
+      isCustomQuote: true,
+    },
+  });
+}
+
 async function processFile(
   c: SiteContext,
   file: DriveItem,
@@ -173,43 +211,69 @@ async function processFile(
       );
     }
 
-    // Resolve customer + campaign + create order
-    const companyId =
-      customerFolderName === "_unsorted"
-        ? null
-        : await resolveCompany(customerFolderName);
+    // PREFERRED PATH — match the file to an existing order by filename.
+    // Tom names his ZIPs `<orderCode>.zip` so we can attach IMbs directly
+    // to the customer's actual order (which already has the proof, payment,
+    // and tracking dashboard set up).
+    const matchedOrder = await findExistingOrderForFile(file.name);
+    let companyId: string;
+    let campaignId: string;
+    let order: { id: string; orderCode: string };
 
-    if (!companyId) {
-      // _unsorted file — log it, but don't auto-create. Admin will route manually.
-      throw new Error(
-        "File dropped in _unsorted — admin must move to a customer folder before reprocessing",
-      );
+    if (matchedOrder) {
+      // Sanity-check: matched order's company should equal the folder
+      const folderCompanyId =
+        customerFolderName === "_unsorted"
+          ? null
+          : await resolveCompany(customerFolderName).catch(() => null);
+      if (folderCompanyId && folderCompanyId !== matchedOrder.companyId) {
+        throw new Error(
+          `Filename matches order ${matchedOrder.orderCode} but the customer folder "${customerFolderName}" doesn't match that order's company. Move the file to the right folder.`,
+        );
+      }
+      companyId = matchedOrder.companyId;
+      campaignId = matchedOrder.campaignId;
+      order = { id: matchedOrder.id, orderCode: matchedOrder.orderCode };
+      // Don't change status — admin's normal lifecycle will handle DROPPED
+      // when the mail is actually handed to USPS. This just attaches IMbs.
+    } else {
+      // FALLBACK PATH — no order match, behave like before. Auto-create a
+      // new order in DROPPED state under the customer folder's company.
+      const fallbackCompanyId =
+        customerFolderName === "_unsorted"
+          ? null
+          : await resolveCompany(customerFolderName);
+      if (!fallbackCompanyId) {
+        throw new Error(
+          "File dropped in _unsorted with no matching order code in filename. Admin must either (a) move to a customer folder OR (b) rename file with a matching order code.",
+        );
+      }
+      companyId = fallbackCompanyId;
+      campaignId = await resolveCampaign(companyId);
+      const orderCode = `CD-${new Date().getFullYear()}-${customerFolderName
+        .replace(/[^A-Z0-9]/gi, "")
+        .toUpperCase()
+        .slice(0, 8)}-${Math.floor(Date.now() / 1000) % 100000}`;
+      const created = await prisma.order.create({
+        data: {
+          orderCode,
+          companyId,
+          campaignId,
+          description: `Auto-imported from SharePoint: ${file.name}`,
+          quantity: validPieces.length,
+          status: "DROPPED", // already processed by AccuZIP, presumed in mail
+          droppedAt: new Date(),
+          createdBy: "system-sharepoint-watcher",
+        },
+      });
+      order = { id: created.id, orderCode: created.orderCode };
     }
 
-    const campaignId = await resolveCampaign(companyId);
-
-    const orderCode = `CD-${new Date().getFullYear()}-${customerFolderName
-      .replace(/[^A-Z0-9]/gi, "")
-      .toUpperCase()
-      .slice(0, 8)}-${Math.floor(Date.now() / 1000) % 100000}`;
-    const order = await prisma.order.create({
-      data: {
-        orderCode,
-        companyId,
-        campaignId,
-        description: `Auto-imported from SharePoint: ${file.name}`,
-        quantity: validPieces.length,
-        status: "DROPPED", // already processed by AccuZIP, presumed in mail
-        droppedAt: new Date(),
-        createdBy: "system-sharepoint-watcher",
-      },
-    });
-
-    // Create a MailBatch + import IMbs as MailPieces
+    // Create a MailBatch + import IMbs as MailPieces (works for both paths)
     const batch = await prisma.mailBatch.create({
       data: {
         campaignId,
-        batchName: `${orderCode} SharePoint auto-import`,
+        batchName: `${order.orderCode} SharePoint auto-import`,
         quantity: validPieces.length,
         dropDate: new Date(),
         status: "processed",

@@ -496,6 +496,10 @@ model Order {
   customQuoteRejectedAt  DateTime? // when customer rejected the quote
   customQuoteRejectReason String?  // optional reason from customer
 
+  // Production handoff — when we notified prepress (Tom) that this order is
+  // ready to be processed in AccuZIP. Used to avoid double-emailing.
+  productionNotifiedAt DateTime?
+
   // ── Final Quantity Reconciliation ────────────────────────────────────
   // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is
   // usually smaller than what the customer uploaded. We adjust quantity
