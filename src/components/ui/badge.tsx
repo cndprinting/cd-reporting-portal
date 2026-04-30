@@ -18,7 +18,8 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
   return (
     <div
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+        // 2px corners (almost square) instead of pill shape — feels like a stamp
+        "inline-flex items-center rounded-sm border px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider transition-colors",
         variantStyles[variant],
         className
       )}

@@ -63,33 +63,48 @@ export default function OverviewPage() {
   const inTransit = totalPieces - totalDelivered;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Portfolio-wide direct mail performance across all customers
-          </p>
+    <div className="space-y-8">
+      {/* Editorial hero header */}
+      <div className="border-b border-line pb-6">
+        <div className="flex items-end justify-between gap-4 mb-3">
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone">
+            Portfolio overview
+          </div>
+          <div className="flex items-center gap-3">
+            {lastUpdated && (
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-stone uppercase tracking-wider">
+                <Clock className="h-3 w-3" />
+                Updated {lastUpdated}
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {lastUpdated && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Clock className="h-3.5 w-3.5" />
-              Updated {lastUpdated}
-            </div>
+        <h1 className="font-display text-5xl font-medium tracking-tight text-ink leading-tight">
+          {totalPieces > 0 ? (
+            <>
+              <span className="italic text-brand-600">{totalDelivered.toLocaleString()}</span>{" "}
+              of {totalPieces.toLocaleString()} pieces delivered
+              <span className="text-stone"> · {((overallRate || 0) * 100).toFixed(0)}% rate.</span>
+            </>
+          ) : (
+            <>Welcome back.</>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={load}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
+        </h1>
+        <p className="text-sm text-stone mt-3 max-w-2xl">
+          {mailers.length > 0
+            ? `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"} across all active campaigns. ${inTransit.toLocaleString()} pieces in transit.`
+            : "No active mail to track yet. When customer orders flow in, they'll show up here automatically."}
+        </p>
       </div>
 
       {/* Real KPIs */}

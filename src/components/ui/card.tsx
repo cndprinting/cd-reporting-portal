@@ -5,7 +5,9 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-xl border border-gray-200 bg-white shadow-sm", className)}
+      // Architectural: 4px corners + hairline warm-tone border + no shadow.
+      // Replaces the old 12px-rounded shadow-sm "bubble card" look.
+      className={cn("rounded border border-line bg-white", className)}
       {...props}
     />
   )
@@ -21,7 +23,15 @@ CardHeader.displayName = "CardHeader";
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />
+    <h3
+      ref={ref}
+      // Display serif for titles — gives editorial weight without shouting
+      className={cn(
+        "font-display text-lg font-medium leading-none tracking-tight text-ink",
+        className,
+      )}
+      {...props}
+    />
   )
 );
 CardTitle.displayName = "CardTitle";
