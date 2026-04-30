@@ -78,9 +78,14 @@ export default function AdminOrdersPage() {
     setupFee: 0,
   });
   const [creating, setCreating] = useState(false);
+  const [filterCompanyId, setFilterCompanyId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   const load = () => {
-    fetch("/api/orders").then((r) => r.json()).then((d) => setOrders(d.orders ?? []));
+    const params = new URLSearchParams();
+    if (filterCompanyId) params.set("companyId", filterCompanyId);
+    if (filterStatus) params.set("status", filterStatus);
+    fetch(`/api/orders?${params}`).then((r) => r.json()).then((d) => setOrders(d.orders ?? []));
     fetch("/api/companies").then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
     fetch("/api/campaigns").then((r) => r.json()).then((d) => {
       const arr = Array.isArray(d) ? d : d.campaigns ?? [];
@@ -88,7 +93,9 @@ export default function AdminOrdersPage() {
     });
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCompanyId, filterStatus]);
 
   const filteredCampaigns = campaigns.filter((c) => c.companyId === form.companyId);
   const totalPrice = (form.quantity * form.pricePerPiece) + form.setupFee;
@@ -242,6 +249,71 @@ export default function AdminOrdersPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Filter bar */}
+      <Card>
+        <CardContent className="py-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500 block mb-1">
+                Customer
+              </label>
+              <select
+                className="h-9 rounded-md border border-gray-300 px-3 text-sm bg-white min-w-[200px]"
+                value={filterCompanyId}
+                onChange={(e) => setFilterCompanyId(e.target.value)}
+              >
+                <option value="">All customers</option>
+                {companies
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-gray-500 block mb-1">
+                Status
+              </label>
+              <select
+                className="h-9 rounded-md border border-gray-300 px-3 text-sm bg-white"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="QUOTE_REQUESTED">Quote Requested</option>
+                <option value="QUOTE_PROVIDED">Quote Provided</option>
+                <option value="IN_PREP">In Prep</option>
+                <option value="PROOF_READY">Proof Ready</option>
+                <option value="APPROVED">Approved</option>
+                <option value="DROPPED">Dropped</option>
+                <option value="DELIVERING">Delivering</option>
+                <option value="COMPLETE">Complete</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+            {(filterCompanyId || filterStatus) && (
+              <button
+                onClick={() => {
+                  setFilterCompanyId("");
+                  setFilterStatus("");
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700 underline mb-1"
+              >
+                Clear filters
+              </button>
+            )}
+            <div className="flex-1" />
+            <div className="text-xs text-gray-500 mb-1">
+              {orders.length} order{orders.length === 1 ? "" : "s"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-0">

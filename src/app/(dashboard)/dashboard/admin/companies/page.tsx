@@ -289,7 +289,14 @@ export default function AdminCompaniesPage() {
               )}
               {companies.map((c) => (
                 <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{c.name}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <a
+                      href={`/dashboard/admin/companies/${c.id}`}
+                      className="text-brand-700 hover:underline"
+                    >
+                      {c.name}
+                    </a>
+                  </td>
                   <td className="text-gray-600">{c.industry ?? "—"}</td>
                   <td className="text-xs">
                     {c.externalCustomerId ? (

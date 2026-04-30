@@ -141,7 +141,12 @@ export async function downloadFile(
   return Buffer.from(arr);
 }
 
-/** Move an item (used to shift processed files into _processed or _errors). */
+/**
+ * Move an item (used to shift processed files into _processed or _errors).
+ * Auto-renames on `nameAlreadyExists` collision by appending a Unix
+ * timestamp before the extension. Common when Tom uploads a re-spin of a
+ * job under the same filename.
+ */
 export async function moveItem(
   driveId: string,
   itemId: string,
@@ -152,11 +157,35 @@ export async function moveItem(
     parentReference: { id: destinationParentId },
   };
   if (newName) body.name = newName;
-  const res = await graphFetch(`/drives/${driveId}/items/${itemId}`, {
+  let res = await graphFetch(`/drives/${driveId}/items/${itemId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  // Retry once with a timestamp-suffixed name on collision
+  if (!res.ok && res.status === 409) {
+    const errBody = await res.text();
+    if (errBody.includes("nameAlreadyExists")) {
+      // We need the original filename to suffix it. Look it up.
+      const lookup = await graphFetch(`/drives/${driveId}/items/${itemId}`);
+      if (lookup.ok) {
+        const data = (await lookup.json()) as { name: string };
+        const original = newName ?? data.name;
+        const dot = original.lastIndexOf(".");
+        const stem = dot > 0 ? original.slice(0, dot) : original;
+        const ext = dot > 0 ? original.slice(dot) : "";
+        const suffixedName = `${stem} (${Math.floor(Date.now() / 1000)})${ext}`;
+        res = await graphFetch(`/drives/${driveId}/items/${itemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parentReference: { id: destinationParentId },
+            name: suffixedName,
+          }),
+        });
+      }
+    }
+  }
   if (!res.ok) {
     throw new Error(`moveItem failed (${res.status}): ${await res.text()}`);
   }
