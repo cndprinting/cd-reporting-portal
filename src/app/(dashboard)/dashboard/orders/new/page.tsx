@@ -92,6 +92,12 @@ export default function NewOrderPage() {
   const [useCustomQuote, setUseCustomQuote] = useState(false);
   const [customQuoteRequest, setCustomQuoteRequest] = useState("");
   const [customQuoteUrgency, setCustomQuoteUrgency] = useState("standard");
+  // Custom Design path — customer brings their own artwork PDF
+  const [useCustomDesign, setUseCustomDesign] = useState(false);
+  const [customDesignUrl, setCustomDesignUrl] = useState<string | null>(null);
+  const [customDesignFileName, setCustomDesignFileName] = useState("");
+  const [customDesignUploading, setCustomDesignUploading] = useState(false);
+  const [customDesignErr, setCustomDesignErr] = useState<string | null>(null);
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignId, setCampaignId] = useState("");
@@ -177,7 +183,27 @@ export default function NewOrderPage() {
 
   const canSubmit = useCustomQuote
     ? !!campaignId && customQuoteRequest.trim().length >= 10
-    : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
+    : useCustomDesign
+      ? !!sheet && !!fileUrl && quality >= 0.6 && !!customDesignUrl && !!campaignId
+      : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
+
+  const handleCustomDesignFile = async (file: File) => {
+    setCustomDesignErr(null);
+    setCustomDesignFileName(file.name);
+    setCustomDesignUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/uploads", { method: "POST", body: fd });
+      const upData = await up.json();
+      if (up.ok) setCustomDesignUrl(upData.url);
+      else setCustomDesignErr(upData.error ?? "Upload failed");
+    } catch (e) {
+      setCustomDesignErr((e as Error).message);
+    } finally {
+      setCustomDesignUploading(false);
+    }
+  };
 
   const handleFile = async (file: File) => {
     setParseErr(null);
@@ -211,7 +237,7 @@ export default function NewOrderPage() {
     setSubmitting(true);
     setSubmitErr(null);
     try {
-      // Create Order — branches by useCustomQuote
+      // Create Order — branches by useCustomQuote / useCustomDesign
       const orderBody = useCustomQuote
         ? {
             campaignId,
@@ -223,6 +249,23 @@ export default function NewOrderPage() {
             customQuoteUrgency,
             customQuoteTargetDate: dropDate,
             status: "QUOTE_REQUESTED",
+          }
+        : useCustomDesign
+        ? {
+            campaignId,
+            description: `Custom design — ${customDesignFileName}`,
+            quantity: rowCount,
+            dropDate,
+            // Custom designs need a rep to confirm specs + price before going live
+            isCustomQuote: true,
+            customQuoteRequest: `Customer-supplied design: ${customDesignFileName}. Please review size/stock and apply pricing.`,
+            customQuoteUrgency: "standard",
+            customDesignUrl,
+            customDesignFileName,
+            status: "QUOTE_REQUESTED",
+            // Persona-module data passes through here too
+            customFields:
+              Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
           }
         : {
             campaignId,
@@ -475,11 +518,49 @@ export default function NewOrderPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Custom Quote tile — sits on the left */}
+            {/* Custom Design tile — bring your own artwork */}
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomDesign(true);
+                setUseCustomQuote(false);
+                setSelectedTemplate(null);
+              }}
+              className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
+                useCustomDesign
+                  ? "border-emerald-500 ring-2 ring-emerald-200"
+                  : "border-emerald-200 hover:border-emerald-400"
+              } bg-gradient-to-br from-emerald-50 to-white`}
+            >
+              <div className="aspect-[3/2] flex flex-col items-center justify-center p-4 text-center">
+                <div className="text-3xl mb-2">🎨</div>
+                <div className="text-sm font-semibold text-emerald-900">
+                  Use My Own Design
+                </div>
+                <div className="text-xs text-emerald-700 mt-1 leading-snug px-2">
+                  Already have artwork? Drag in your PDF and we&rsquo;ll merge
+                  your list onto it.
+                </div>
+              </div>
+              <div className="p-3 bg-white border-t border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-emerald-900">
+                    Drop your PDF
+                  </div>
+                  {useCustomDesign && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                </div>
+                <div className="text-xs text-emerald-700 mt-0.5">
+                  Your rep prices it based on size + stock
+                </div>
+              </div>
+            </button>
+
+            {/* Custom Quote tile */}
             <button
               type="button"
               onClick={() => {
                 setUseCustomQuote(true);
+                setUseCustomDesign(false);
                 setSelectedTemplate(null);
               }}
               className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
@@ -535,6 +616,7 @@ export default function NewOrderPage() {
                   onClick={() => {
                     setSelectedTemplate(t);
                     setUseCustomQuote(false);
+                    setUseCustomDesign(false);
                   }}
                   className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
                     isSelected
@@ -569,6 +651,66 @@ export default function NewOrderPage() {
                 value={customOffer}
                 onChange={(e) => setCustomOffer(e.target.value)}
               />
+            </div>
+          )}
+
+          {/* Custom Design upload — appears when the Custom Design tile is selected */}
+          {useCustomDesign && (
+            <div className="mt-4 space-y-3 rounded-lg border-2 border-emerald-200 bg-emerald-50/30 p-4">
+              <div className="text-sm font-semibold text-emerald-900">
+                Drop your mailer artwork
+              </div>
+              {!customDesignUrl ? (
+                <DropZone
+                  accept=".pdf,application/pdf"
+                  disabled={customDesignUploading}
+                  onFile={handleCustomDesignFile}
+                  tone="emerald"
+                  className="p-8"
+                >
+                  <div className="text-3xl mb-2">📄</div>
+                  <div className="text-sm font-semibold text-emerald-900">
+                    Drop your PDF here
+                  </div>
+                  <div className="text-xs text-emerald-700 mt-1">
+                    PDF only · or click to browse · print-ready files preferred
+                    (300dpi, CMYK, with bleed)
+                  </div>
+                  {customDesignUploading && (
+                    <div className="text-xs text-emerald-600 mt-2">Uploading…</div>
+                  )}
+                </DropZone>
+              ) : (
+                <div className="flex items-center justify-between bg-white border border-emerald-200 rounded p-3">
+                  <div className="flex items-center gap-3">
+                    <Check className="h-5 w-5 text-emerald-600" />
+                    <div>
+                      <div className="font-medium text-sm">{customDesignFileName}</div>
+                      <div className="text-xs text-emerald-700">
+                        Uploaded · ready to merge with your list
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCustomDesignUrl(null);
+                      setCustomDesignFileName("");
+                    }}
+                  >
+                    Change file
+                  </Button>
+                </div>
+              )}
+              {customDesignErr && (
+                <div className="text-xs text-rose-700">{customDesignErr}</div>
+              )}
+              <div className="text-xs text-emerald-800 bg-white rounded p-2 border border-emerald-200">
+                <strong>What happens next:</strong> your C&amp;D rep reviews
+                your design, confirms size + stock, and prices the job. You
+                approve the proof and the price before anything mails.
+              </div>
             </div>
           )}
 
@@ -623,7 +765,8 @@ export default function NewOrderPage() {
       {/* STEP 3: PRICE + DROP DATE + SUBMIT */}
       <Card
         className={
-          (!sheet && !useCustomQuote) || (!selectedTemplate && !useCustomQuote)
+          (!sheet && !useCustomQuote) ||
+          (!selectedTemplate && !useCustomQuote && !useCustomDesign)
             ? "opacity-60 pointer-events-none"
             : ""
         }

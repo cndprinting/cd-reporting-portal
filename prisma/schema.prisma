@@ -496,6 +496,12 @@ model Order {
   mailingListMapping   Json?
   // Selected template for auto-merge preview
   mailerTemplateId     String?
+  // ── Customer-supplied custom design ────────────────────────────────
+  // Customer drags in their own mailer design PDF instead of (or in addition
+  // to) picking a stock template. Admin reviews + prices based on size/stock.
+  customDesignUrl       String?
+  customDesignFileName  String?
+  customDesignUploadedAt DateTime?
   // Optional custom per-recipient field ("offer text", etc.) user typed during order creation
   customOffer          String?
   // ── Module-specific data (persona modules write here) ──────────────

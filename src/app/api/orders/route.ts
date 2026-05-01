@@ -116,6 +116,10 @@ export async function POST(req: NextRequest) {
         : null,
       // Persona-module data (e.g. land-investor offer rules + recipient filters)
       customFields: customFields ?? undefined,
+      // Customer-supplied design PDF (when picked the "Use my own design" tile)
+      customDesignUrl: body.customDesignUrl ?? null,
+      customDesignFileName: body.customDesignFileName ?? null,
+      customDesignUploadedAt: body.customDesignUrl ? new Date() : null,
     },
     include: {
       company: { select: { name: true, users: { select: { email: true } } } },
