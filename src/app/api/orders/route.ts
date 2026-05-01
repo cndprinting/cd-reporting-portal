@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     pricePerPiece,
     setupFee,
     totalPrice,
+    customFields,
   } = body;
 
   // Customers can only create orders for their own company
@@ -113,6 +114,8 @@ export async function POST(req: NextRequest) {
       customQuoteTargetDate: body.customQuoteTargetDate
         ? new Date(body.customQuoteTargetDate)
         : null,
+      // Persona-module data (e.g. land-investor offer rules + recipient filters)
+      customFields: customFields ?? undefined,
     },
     include: {
       company: { select: { name: true, users: { select: { email: true } } } },

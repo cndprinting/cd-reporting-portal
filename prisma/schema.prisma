@@ -137,6 +137,14 @@ model Company {
   retargetingInterests RetargetingInterest[]
   // Saved Stripe customer id (lets us charge the card on file)
   stripeCustomerId String?
+  // ── Persona modules ──────────────────────────────────────────────
+  // Industry-specific feature packs enabled for this company. Examples:
+  //   "land-investor"     — Aaron / BH Land Group: APN, acreage, offer ranges, skip-trace
+  //   "bank-compliance"   — Achieva: regulatory disclaimers, encrypted lists
+  //   "healthcare-hipaa"  — hospitals: PHI handling, HIPAA-style audit trail
+  //   "real-estate"       — brokers/agents: MLS imports, listing-aware mailers
+  // Empty array = standard order flow (current default).
+  enabledModules String[] @default([])
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -279,6 +287,13 @@ model MailPiece {
 
   // Seed list flag (for QA / known-good addresses)
   isSeed              Boolean         @default(false)
+
+  // ── Module-specific data (persona modules write here) ──────────────
+  // Free-form JSON for per-piece data the persona module needs to merge into
+  // the mailer or report on. For Land/RE this is where APN, acreage, county,
+  // offer low/high, equity tier, skip-trace status, vacant flag, etc. live.
+  // Standard customers have null.
+  customFields        Json?
 
   scanEvents          ScanEvent[]
   createdAt           DateTime        @default(now())
@@ -483,6 +498,12 @@ model Order {
   mailerTemplateId     String?
   // Optional custom per-recipient field ("offer text", etc.) user typed during order creation
   customOffer          String?
+  // ── Module-specific data (persona modules write here) ──────────────
+  // Free-form JSON that persona modules use to store order-level config:
+  //   land-investor: { offerRules: {...}, recipientFilters: {...}, recipientSource: "PropStream" }
+  //   bank-compliance: { complianceProgram: "...", regulatorNoticeIncluded: true }
+  // Standard customers have null. Schema is the module's responsibility.
+  customFields         Json?
 
   // ── Custom Quote flow ───────────────────────────────────────────────
   // When a customer requests a custom price (oversized mailer, specialty

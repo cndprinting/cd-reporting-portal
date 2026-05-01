@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropZone } from "@/components/ui/dropzone";
+import { getEnabledModules, type ModuleManifest } from "@/modules/registry";
 
 interface Campaign {
   id: string;
@@ -108,6 +109,11 @@ export default function NewOrderPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
+  // Persona modules enabled for this company (e.g. land-investor for BH Land Group).
+  // Each module renders its own UI section + writes to moduleFields[moduleId].
+  const [enabledModules, setEnabledModules] = useState<ModuleManifest[]>([]);
+  const [moduleFields, setModuleFields] = useState<Record<string, Record<string, unknown>>>({});
+
   useEffect(() => {
     fetch("/api/templates").then((r) => r.json()).then((d) => setTemplates(d.templates ?? []));
     fetch("/api/campaigns")
@@ -118,6 +124,14 @@ export default function NewOrderPage() {
         // Auto-select if there's exactly one — customer doesn't have to think
         if (list.length === 1) setCampaignId(list[0].id);
       });
+    // Load persona modules
+    fetch("/api/me/modules")
+      .then((r) => r.json())
+      .then((d) => {
+        const mods = getEnabledModules(d.enabledModules ?? []);
+        setEnabledModules(mods);
+      })
+      .catch(() => setEnabledModules([]));
   }, []);
 
   const createCampaign = async () => {
@@ -219,6 +233,9 @@ export default function NewOrderPage() {
             mailShape: selectedTemplate!.category,
             pricePerPiece: selectedTemplate!.pricePerPiece,
             totalPrice,
+            // Persona-module data: stored in Order.customFields keyed by module id
+            customFields:
+              Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
           };
 
       const r = await fetch("/api/orders", {
@@ -422,6 +439,25 @@ export default function NewOrderPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* PERSONA MODULES — render any modules enabled on this customer's company.
+          For BH Land Group this surfaces APN/acreage mapping + offer pricing + filters.
+          Standard customers see nothing here. */}
+      {enabledModules.map((mod) => {
+        const Comp = mod.OrderFields;
+        if (!Comp) return null;
+        return (
+          <Comp
+            key={mod.id}
+            value={moduleFields[mod.id] ?? {}}
+            onChange={(next) =>
+              setModuleFields((prev) => ({ ...prev, [mod.id]: next }))
+            }
+            rowCount={rowCount}
+            sheetHeaders={sheet?.headers ?? []}
+          />
+        );
+      })}
 
       {/* STEP 2: PICK TEMPLATE */}
       <Card className={!sheet && !useCustomQuote ? "opacity-60 pointer-events-none" : ""}>
