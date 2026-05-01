@@ -2,42 +2,27 @@
  * Land Investor module — for customers like Aaron / BH Land Group who mail
  * land owners offers based on parcel data.
  *
- * Mailer template tokens this module provides (see proof from BH Land Group):
+ * Mailer template tokens this module provides:
  *   <<APN>>         — parcel number
  *   <<Acreage>>     — acres, formatted
  *   <<County>>      — property county
  *   <<State>>       — property state
- *   <<OfferLow>>    — low end of cash offer ($)
- *   <<OfferHigh>>   — high end of cash offer ($)
+ *   <<Offer>>       — single offer ($) — used when offerType = "single"
+ *   <<OfferLow>>    — low end of cash offer ($) — used when offerType = "range"
+ *   <<OfferHigh>>   — high end of cash offer ($) — used when offerType = "range"
  *   <<ReferenceID>> — per-piece tracking ref (auto-generated)
- *
- * Recipient list columns expected (mailing address is already covered by
- * the standard fields; these are the property-side fields):
- *   APN, Property County, Property State, Acreage, Assessed Value,
- *   Last Sale Date, Last Sale Price, Equity %, Vacant flag, Heir flag,
- *   Owner-occupied flag, Skip-trace status
  *
  * Order-level config (Order.customFields):
  *   {
- *     offerRules: {
- *       mode: "per-row" | "formula" | "tiered",
- *       perRowLowCol?: string,           // for per-row mode
- *       perRowHighCol?: string,
- *       formula?: { ratePerAcre: number, multiplier: number },
- *       tiers?: { min: number, max: number, low: number, high: number }[],
- *     },
- *     recipientFilters: {
- *       minEquityPct?: number,
- *       vacantOnly?: boolean,
- *       heirProbateOnly?: boolean,
- *       minAcreage?: number,
- *       maxAcreage?: number,
- *       skipTraceVerifiedOnly?: boolean,
- *     },
- *     recipientSource?: string,  // "PropStream", "DataTree", "manual"
- *     mailingAddressColumns: { line1: string, city: string, state: string, zip: string },
- *     propertyAddressColumns?: { line1: string, city: string, state: string, zip: string },
+ *     columnMap: { apn, acreage, propertyCounty, propertyState, ... },
+ *     offerType: "single" | "range" | "none",
+ *     offerColumns: { single?: string, low?: string, high?: string },
+ *     recipientSource?: string,
  *   }
+ *
+ * For offerType = "single", the spreadsheet has one offer column.
+ * For offerType = "range", two columns (low + high).
+ * For offerType = "none", no offer is printed (neutral mailer — just APN/acreage info).
  */
 
 import type { ModuleManifest } from "../registry";
@@ -47,12 +32,13 @@ export const landInvestorModule: ModuleManifest = {
   id: "land-investor",
   label: "Land Investor",
   tagline:
-    "Parcel-aware mailings: APN, acreage, per-parcel cash offers, skip-trace, equity filters.",
+    "Parcel-aware mailings: APN, acreage, county, and per-parcel cash offers.",
   mergeVars: [
     { token: "APN", label: "Parcel number (APN)", sample: "043-220-018" },
     { token: "Acreage", label: "Acreage", sample: "12.4" },
     { token: "County", label: "Property county", sample: "Madison" },
     { token: "State", label: "Property state", sample: "NC" },
+    { token: "Offer", label: "Cash offer (single)", sample: "$22,000" },
     { token: "OfferLow", label: "Cash offer (low)", sample: "$18,000" },
     { token: "OfferHigh", label: "Cash offer (high)", sample: "$26,000" },
     {
@@ -87,66 +73,6 @@ export const landInvestorModule: ModuleManifest = {
       label: "Property state",
       aliases: ["property state", "parcel state", "land state"],
       required: true,
-    },
-    {
-      field: "propertyAddress",
-      label: "Property address (situs)",
-      aliases: ["situs address", "property address", "parcel address"],
-      hint: "Optional — physical location of the land if it has one",
-    },
-    {
-      field: "assessedValue",
-      label: "Assessed value",
-      aliases: ["assessed value", "tax value", "assessor value"],
-    },
-    {
-      field: "lastSalePrice",
-      label: "Last sale price",
-      aliases: ["last sale price", "prior sale", "sale price"],
-    },
-    {
-      field: "lastSaleDate",
-      label: "Last sale date",
-      aliases: ["last sale date", "sale date", "deed date"],
-    },
-    {
-      field: "equityPct",
-      label: "Equity %",
-      aliases: ["equity", "equity pct", "equity percent", "equity_%"],
-      hint: "Used by recipient filters (e.g. only mail 50%+ equity owners)",
-    },
-    {
-      field: "vacant",
-      label: "Vacant land flag",
-      aliases: ["vacant", "vacant land", "is_vacant"],
-      hint: "Vacant land vs. SFR / improved — drives offer formula",
-    },
-    {
-      field: "heirProbate",
-      label: "Heir / probate flag",
-      aliases: ["heir", "probate", "inherited", "estate"],
-    },
-    {
-      field: "ownerOccupied",
-      label: "Owner-occupied flag",
-      aliases: ["owner occupied", "occupancy", "absentee"],
-    },
-    {
-      field: "skipTraceStatus",
-      label: "Skip-trace status",
-      aliases: ["skip trace", "skip-trace", "trace status", "verified"],
-      hint: 'e.g. "verified", "unverified", "bad address"',
-    },
-    {
-      field: "offerLow",
-      label: "Per-row offer low ($)",
-      aliases: ["offer low", "low offer", "offer_low_$", "min offer"],
-      hint: "Optional — only if you've already calculated offers per row",
-    },
-    {
-      field: "offerHigh",
-      label: "Per-row offer high ($)",
-      aliases: ["offer high", "high offer", "offer_high_$", "max offer"],
     },
   ],
   OrderFields: LandInvestorOrderFields,
