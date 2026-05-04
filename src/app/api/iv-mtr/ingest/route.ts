@@ -97,15 +97,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let parsedBody: string | IVScanRecord[] = body;
+    let parsedBody: string | IVScanRecord[] | Record<string, unknown>[] = body;
     if (contentType.includes("json") || body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) {
       const obj = JSON.parse(body);
-      // USPS may wrap events in { events: [...] } or { trackingEvents: [...] }
-      if (Array.isArray(obj)) parsedBody = obj as IVScanRecord[];
-      else if (Array.isArray(obj.events)) parsedBody = obj.events as IVScanRecord[];
-      else if (Array.isArray(obj.trackingEvents)) parsedBody = obj.trackingEvents as IVScanRecord[];
-      else if (Array.isArray(obj.scans)) parsedBody = obj.scans as IVScanRecord[];
-      else parsedBody = [obj as IVScanRecord]; // single event push
+      // USPS may wrap events in many shapes — try every common one
+      if (Array.isArray(obj)) parsedBody = obj;
+      else if (Array.isArray(obj.events)) parsedBody = obj.events;
+      else if (Array.isArray(obj.trackingEvents)) parsedBody = obj.trackingEvents;
+      else if (Array.isArray(obj.scans)) parsedBody = obj.scans;
+      else if (Array.isArray(obj.scanEvents)) parsedBody = obj.scanEvents;
+      else if (Array.isArray(obj.records)) parsedBody = obj.records;
+      else if (Array.isArray(obj.data)) parsedBody = obj.data;
+      else if (Array.isArray(obj.results)) parsedBody = obj.results;
+      else if (Array.isArray(obj.items)) parsedBody = obj.items;
+      else parsedBody = [obj]; // single event push
     } else if (contentType.includes("xml") || body.trimStart().startsWith("<")) {
       parsedBody = parseXMLScans(body);
     }
@@ -114,6 +119,7 @@ export async function POST(req: NextRequest) {
       source: "iv-mtr-push",
       fileName,
       body: parsedBody,
+      rawBody: body, // so a sample lands on the IVFeedIngestion row for debugging
     });
     return NextResponse.json(result);
   } catch (e) {

@@ -43,6 +43,101 @@ export interface IVScanRecord {
   predictedDeliveryDate?: string;
 }
 
+/**
+ * USPS IV-MTR push format is inconsistent across tenants and contracts. Real
+ * payloads we've seen / could see field names like:
+ *   imb / IMb / IMB / intelligentMailBarcode / barcode / impb / ImbSerial
+ *   scanDateTime / scanDate / eventDateTime / eventTime / dateTime
+ *   operationCode / opCode / scanCode / eventCode
+ *   operationDesc / scanDesc / eventDescription
+ *   facilityZip / scanFacilityZip / locationZip
+ *   facilityCity / scanFacilityCity / locationCity
+ *   facilityState / scanFacilityState / locationState
+ * This normalizer accepts any of these and produces our canonical IVScanRecord.
+ * Returns null if it can't extract a valid IMb + scan date.
+ */
+export function normalizeRecord(raw: Record<string, unknown>): IVScanRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  // Flatten known nested wrappers so we can pick fields uniformly
+  const r: Record<string, unknown> = { ...raw };
+  for (const wrapper of ["scanEvent", "event", "tracking", "trackingEvent", "data"]) {
+    const inner = (raw as Record<string, unknown>)[wrapper];
+    if (inner && typeof inner === "object") Object.assign(r, inner as Record<string, unknown>);
+  }
+
+  // Helper: case-insensitive field pick across alias list
+  const pick = (...aliases: string[]): string | undefined => {
+    for (const alias of aliases) {
+      // exact case
+      const v = r[alias];
+      if (v != null && v !== "") return String(v);
+      // case-insensitive scan
+      const lower = alias.toLowerCase();
+      for (const k of Object.keys(r)) {
+        if (k.toLowerCase() === lower && r[k] != null && r[k] !== "") return String(r[k]);
+      }
+    }
+    return undefined;
+  };
+
+  const imbRaw = pick(
+    "imb",
+    "IMb",
+    "IMB",
+    "intelligentMailBarcode",
+    "intelligentMailBarCode",
+    "imbBarcode",
+    "barcode",
+    "barCode",
+    "impb",
+    "imbSerial",
+    "ImbSerialNumber",
+  );
+  if (!imbRaw) return null;
+  const imb = imbRaw.replace(/\D/g, "");
+  if (imb.length < 20 || imb.length > 31) return null;
+
+  const scanDateTime = pick(
+    "scanDateTime",
+    "scanDate",
+    "eventDateTime",
+    "eventTime",
+    "eventDate",
+    "dateTime",
+    "datetime",
+    "timestamp",
+    "scanTimestamp",
+  );
+  if (!scanDateTime) return null;
+
+  return {
+    imb,
+    scanDateTime,
+    operationCode: pick("operationCode", "opCode", "scanCode", "eventCode", "stcOpCode"),
+    operationDesc: pick(
+      "operationDesc",
+      "operationDescription",
+      "scanDesc",
+      "scanDescription",
+      "eventDescription",
+      "eventDesc",
+    ),
+    facilityZip: pick("facilityZip", "scanFacilityZip", "locationZip", "facilityZIP"),
+    facilityCity: pick("facilityCity", "scanFacilityCity", "locationCity", "city"),
+    facilityState: pick("facilityState", "scanFacilityState", "locationState", "state"),
+    facilityType: pick("facilityType", "scanFacilityType", "locationType"),
+    machineId: pick("machineId", "machineID", "scanMachineId", "machine"),
+    runId: pick("runId", "runID", "scanRunId", "run"),
+    predictedDeliveryDate: pick(
+      "predictedDeliveryDate",
+      "expectedDeliveryDate",
+      "deliveryDate",
+      "predictedDelivery",
+    ),
+  };
+}
+
 export interface IngestResult {
   ingestionId: string;
   received: number;
@@ -71,23 +166,47 @@ export function parseCSVScans(csv: string): IVScanRecord[] {
 export async function ingestIVFile(input: {
   source: "iv-mtr-push" | "iv-mtr-pull" | "manual";
   fileName?: string;
-  body: string | IVScanRecord[];
+  body: string | IVScanRecord[] | Record<string, unknown>[];
+  /** Original raw body text (so we can stash a sample on the ingestion row for debugging) */
+  rawBody?: string;
 }): Promise<IngestResult> {
   if (!prisma) throw new Error("Database not initialized");
 
-  const records: IVScanRecord[] = Array.isArray(input.body)
-    ? input.body
-    : input.body.trim().startsWith("[") || input.body.trim().startsWith("{")
-    ? JSON.parse(input.body)
-    : parseCSVScans(input.body);
+  // Stash a truncated raw sample of the inbound body so admins can see USPS's
+  // actual format if anything goes wrong. 4KB max — enough to read the shape.
+  const rawSample =
+    input.rawBody?.slice(0, 4096) ??
+    (typeof input.body === "string" ? input.body.slice(0, 4096) : JSON.stringify(input.body).slice(0, 4096));
+
+  // Parse to raw records (objects with arbitrary field names)
+  let rawRecords: Record<string, unknown>[];
+  if (Array.isArray(input.body)) {
+    rawRecords = input.body as Record<string, unknown>[];
+  } else if (input.body.trim().startsWith("[") || input.body.trim().startsWith("{")) {
+    const parsed = JSON.parse(input.body);
+    rawRecords = Array.isArray(parsed) ? parsed : [parsed];
+  } else {
+    rawRecords = parseCSVScans(input.body) as unknown as Record<string, unknown>[];
+  }
+
+  // Normalize to canonical IVScanRecord, keeping rejects so we can log them
+  const records: IVScanRecord[] = [];
+  let normalizationFailures = 0;
+  for (const raw of rawRecords) {
+    const norm = normalizeRecord(raw);
+    if (norm) records.push(norm);
+    else normalizationFailures++;
+  }
 
   const ingestion = await prisma.iVFeedIngestion.create({
     data: {
       source: input.source,
       fileName: input.fileName ?? null,
       fileSize: typeof input.body === "string" ? input.body.length : null,
-      recordsReceived: records.length,
+      recordsReceived: rawRecords.length,
       status: "PROCESSING",
+      // Stash sample raw body in errorMessage for now (no dedicated column yet)
+      errorMessage: `RAW_SAMPLE: ${rawSample}`,
     },
   });
 
@@ -95,31 +214,40 @@ export async function ingestIVFile(input: {
   let skipped = 0;
   let unknownImbs = 0;
   const errors: string[] = [];
+  if (normalizationFailures > 0) {
+    errors.push(
+      `${normalizationFailures} record(s) failed to normalize (missing IMb or scan date). Check raw sample.`,
+    );
+  }
 
-  // Preload all MailPiece IDs for the IMbs in this batch in one query
-  const imbs = [...new Set(records.map((r) => r.imb))];
-  const pieces = await prisma.mailPiece.findMany({
-    where: { imb: { in: imbs } },
-    select: { id: true, imb: true, campaignId: true },
-  });
-  const pieceByImb = new Map(pieces.map((p) => [p.imb, p]));
+  try {
+    // Preload all MailPiece IDs for the IMbs in this batch in one query
+    const imbs = [...new Set(records.map((r) => r.imb))];
+    const pieces = imbs.length
+      ? await prisma.mailPiece.findMany({
+          where: { imb: { in: imbs } },
+          select: { id: true, imb: true, campaignId: true },
+        })
+      : [];
+    const pieceByImb = new Map(pieces.map((p) => [p.imb, p]));
 
-  // Collect unmatched IMbs first; we'll persist them in 2 bulk queries below
-  // instead of N sequential upserts (which timed out on 372-row pushes).
-  const unmatchedSamples = new Map<
-    string,
-    {
-      imb: string;
-      sampleOperation: string | null;
-      sampleFacilityCity: string | null;
-      sampleFacilityState: string | null;
-      sampleFacilityZip: string | null;
-      sampleIngestionId: string;
-    }
-  >();
+    // Build bulk createMany payloads — much faster than N sequential upserts.
+    // We rely on the unique constraint (imb, scanDatetime, operationCode,
+    // facilityZip) + skipDuplicates to dedupe.
+    const scanRows: Array<Record<string, unknown>> = [];
+    const unmatchedSamples = new Map<
+      string,
+      {
+        imb: string;
+        sampleOperation: string | null;
+        sampleFacilityCity: string | null;
+        sampleFacilityState: string | null;
+        sampleFacilityZip: string | null;
+        sampleIngestionId: string;
+      }
+    >();
 
-  for (const rec of records) {
-    try {
+    for (const rec of records) {
       const piece = pieceByImb.get(rec.imb);
       if (!piece) {
         unknownImbs++;
@@ -137,106 +265,127 @@ export async function ingestIVFile(input: {
       }
 
       const scanDate = new Date(rec.scanDateTime);
-      const operation = mapOperationCode(rec.operationCode) as
-        | "ORIGIN_ACCEPTANCE"
-        | "ORIGIN_PROCESSED"
-        | "IN_TRANSIT"
-        | "DESTINATION_PROCESSED"
-        | "DESTINATION_DELIVERY"
-        | "OUT_FOR_DELIVERY"
-        | "DELIVERED"
-        | "UNDELIVERABLE"
-        | "OTHER";
+      if (isNaN(scanDate.getTime())) {
+        skipped++;
+        errors.push(`${rec.imb}: invalid scanDateTime ${rec.scanDateTime}`);
+        continue;
+      }
 
-      // Dedup via unique index (imb, scanDatetime, operationCode, facilityZip)
-      const result = await prisma.scanEvent.upsert({
-        where: {
-          imb_scanDatetime_operationCode_facilityZip: {
-            imb: rec.imb,
-            scanDatetime: scanDate,
-            operationCode: rec.operationCode ?? "",
-            facilityZip: rec.facilityZip ?? "",
-          },
-        },
-        create: {
-          mailPieceId: piece.id,
-          imb: rec.imb,
-          scanDatetime: scanDate,
-          operation,
-          operationCode: rec.operationCode,
-          operationDesc: rec.operationDesc,
-          facilityZip: rec.facilityZip,
-          facilityCity: rec.facilityCity,
-          facilityState: rec.facilityState,
-          facilityType: rec.facilityType,
-          machineId: rec.machineId,
-          runId: rec.runId,
-          predictedDeliveryDate: rec.predictedDeliveryDate ? new Date(rec.predictedDeliveryDate) : null,
-          rawPayload: rec as unknown as object,
-          ingestionId: ingestion.id,
-        },
-        update: {}, // no-op on duplicate
+      const operation = mapOperationCode(rec.operationCode);
+
+      scanRows.push({
+        mailPieceId: piece.id,
+        imb: rec.imb,
+        scanDatetime: scanDate,
+        operation,
+        operationCode: rec.operationCode ?? null,
+        operationDesc: rec.operationDesc ?? null,
+        facilityZip: rec.facilityZip ?? null,
+        facilityCity: rec.facilityCity ?? null,
+        facilityState: rec.facilityState ?? null,
+        facilityType: rec.facilityType ?? null,
+        machineId: rec.machineId ?? null,
+        runId: rec.runId ?? null,
+        predictedDeliveryDate: rec.predictedDeliveryDate ? new Date(rec.predictedDeliveryDate) : null,
+        rawPayload: rec as unknown as object,
+        ingestionId: ingestion.id,
       });
-      if (result) inserted++;
-      else skipped++;
-    } catch (e) {
-      errors.push(`${rec.imb}: ${(e as Error).message}`);
-      skipped++;
     }
-  }
 
-  // Bulk-persist unmatched IMbs in 2 queries instead of N sequential upserts:
-  //   1. createMany skipDuplicates → inserts brand-new ones with occurrences=1
-  //   2. updateMany over the same set → bumps occurrences + lastSeenAt for ones
-  //      that already existed before this batch
-  // We use updateMany WHERE imb IN (...) AND firstSeenAt < <runStart> so we
-  // only bump pre-existing rows, leaving fresh inserts at occurrences=1.
-  if (unmatchedSamples.size > 0) {
-    const runStart = new Date();
-    const samplesArr = [...unmatchedSamples.values()];
-    await prisma.unknownImb
-      .createMany({ data: samplesArr, skipDuplicates: true })
-      .catch((e) => errors.push(`unknownImb createMany: ${(e as Error).message}`));
-    await prisma.unknownImb
-      .updateMany({
-        where: {
-          imb: { in: samplesArr.map((s) => s.imb) },
-          firstSeenAt: { lt: runStart },
-        },
+    // Bulk insert scans (skipDuplicates handles re-pushes from USPS)
+    if (scanRows.length > 0) {
+      const result = await prisma.scanEvent.createMany({
+        data: scanRows as never,
+        skipDuplicates: true,
+      });
+      inserted = result.count;
+      skipped += scanRows.length - result.count;
+    }
+
+    // Bulk-persist unmatched IMbs (orphan scans we couldn't match)
+    if (unmatchedSamples.size > 0) {
+      const runStart = new Date();
+      const samplesArr = [...unmatchedSamples.values()];
+      try {
+        await prisma.unknownImb.createMany({ data: samplesArr, skipDuplicates: true });
+      } catch (e) {
+        errors.push(`unknownImb createMany: ${(e as Error).message}`);
+      }
+      try {
+        await prisma.unknownImb.updateMany({
+          where: {
+            imb: { in: samplesArr.map((s) => s.imb) },
+            firstSeenAt: { lt: runStart },
+          },
+          data: {
+            lastSeenAt: new Date(),
+            occurrences: { increment: 1 },
+          },
+        });
+      } catch (e) {
+        errors.push(`unknownImb updateMany: ${(e as Error).message}`);
+      }
+    }
+
+    // Recompute MailPiece statuses for affected pieces (best effort — don't
+    // let one rollup failure block the whole ingestion's success status)
+    const affectedIds = [...new Set(pieces.map((p) => p.id))];
+    for (const id of affectedIds) {
+      await rollupMailPieceStatus(id).catch((e) =>
+        errors.push(`rollup ${id}: ${(e as Error).message}`),
+      );
+    }
+    const affectedCampaignIds = [...new Set(pieces.map((p) => p.campaignId))];
+    for (const campaignId of affectedCampaignIds) {
+      await rollupOrdersForCampaign(campaignId).catch((e) =>
+        errors.push(`order rollup ${campaignId}: ${(e as Error).message}`),
+      );
+    }
+
+    // Decide final status: COMPLETED if any scans landed (or if there was
+    // genuinely nothing matchable to land); FAILED only on hard problems.
+    const status =
+      normalizationFailures === rawRecords.length && rawRecords.length > 0
+        ? "FAILED" // every single record was unparseable
+        : "COMPLETED";
+
+    await prisma.iVFeedIngestion.update({
+      where: { id: ingestion.id },
+      data: {
+        recordsInserted: inserted,
+        recordsSkipped: skipped,
+        status,
+        errorMessage: errors.length
+          ? `${errors.slice(0, 20).join("; ")} | RAW_SAMPLE: ${rawSample}`
+          : `RAW_SAMPLE: ${rawSample}`,
+        completedAt: new Date(),
+      },
+    });
+
+    return {
+      ingestionId: ingestion.id,
+      received: rawRecords.length,
+      inserted,
+      skipped,
+      unknownImbs,
+      errors,
+    };
+  } catch (e) {
+    // Hard failure — mark FAILED with the error and rethrow so caller sees it
+    const msg = (e as Error).message;
+    console.error("[ingestIVFile] FAILED", msg, (e as Error).stack);
+    await prisma.iVFeedIngestion
+      .update({
+        where: { id: ingestion.id },
         data: {
-          lastSeenAt: new Date(),
-          occurrences: { increment: 1 },
+          status: "FAILED",
+          errorMessage: `FATAL: ${msg} | RAW_SAMPLE: ${rawSample}`,
+          completedAt: new Date(),
         },
       })
-      .catch((e) => errors.push(`unknownImb updateMany: ${(e as Error).message}`));
+      .catch(() => {});
+    throw e;
   }
-
-  // Recompute status for every affected mailpiece
-  const affectedIds = [...new Set(pieces.map((p) => p.id))];
-  for (const id of affectedIds) {
-    await rollupMailPieceStatus(id).catch((e) => errors.push(`rollup ${id}: ${e.message}`));
-  }
-
-  // Roll affected campaigns up to their Orders: DROPPED → DELIVERING → COMPLETE
-  const affectedCampaignIds = [...new Set(pieces.map((p) => p.campaignId))];
-  for (const campaignId of affectedCampaignIds) {
-    await rollupOrdersForCampaign(campaignId).catch((e) =>
-      errors.push(`order rollup ${campaignId}: ${e.message}`),
-    );
-  }
-
-  await prisma.iVFeedIngestion.update({
-    where: { id: ingestion.id },
-    data: {
-      recordsInserted: inserted,
-      recordsSkipped: skipped,
-      status: errors.length > 0 ? "COMPLETED" : "COMPLETED",
-      errorMessage: errors.length ? errors.slice(0, 20).join("; ") : null,
-      completedAt: new Date(),
-    },
-  });
-
-  return { ingestionId: ingestion.id, received: records.length, inserted, skipped, unknownImbs, errors };
 }
 
 /**
