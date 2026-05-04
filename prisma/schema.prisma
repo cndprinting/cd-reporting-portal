@@ -65,6 +65,7 @@ enum MailPieceStatus {
   DELIVERED           // Final delivery scan
   DELIVERED_INFERRED  // OFD + no bounce after 2 days, no final scan
   UNDELIVERABLE       // UAA / return to sender
+  EXPIRED_NO_SCAN     // Drop date > 30 days ago, never got a USPS scan — past IV-MTR retention
 }
 
 enum ScanOperation {

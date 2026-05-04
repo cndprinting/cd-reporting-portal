@@ -29,6 +29,7 @@ interface Mailer {
   deliveredCount: number;
   inTransitCount: number;
   pendingCount: number;
+  expiredCount: number;
   trackedCount: number;
   deliveryRate: number;
 }
@@ -64,7 +65,10 @@ export default function OverviewPage() {
   const totalDelivered = mailers.reduce((s, m) => s + m.deliveredCount, 0);
   const totalInTransit = mailers.reduce((s, m) => s + (m.inTransitCount ?? 0), 0);
   const totalPending = mailers.reduce((s, m) => s + (m.pendingCount ?? 0), 0);
+  const totalExpired = mailers.reduce((s, m) => s + (m.expiredCount ?? 0), 0);
   const totalTracked = mailers.reduce((s, m) => s + (m.trackedCount ?? 0), 0);
+  // Active = pieces still capable of producing scan data (not archived/expired)
+  const totalActive = totalPieces - totalExpired;
   // Delivery rate is computed against pieces USPS has actually started
   // tracking, not against PENDING pieces (older mail past the scan window).
   const overallRate = totalTracked ? totalDelivered / totalTracked : 0;
@@ -120,11 +124,28 @@ export default function OverviewPage() {
           )}
         </h1>
         <p className="text-sm text-stone mt-3 max-w-2xl">
-          {mailers.length === 0
-            ? "No active mail to track yet. When customer orders flow in, they'll show up here automatically."
-            : totalPending > 0 && totalTracked > 0
-              ? `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"}. ${totalPending.toLocaleString()} pieces still pending USPS pickup (older mailings or just-imported lists).`
-              : `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"} across all active campaigns.`}
+          {mailers.length === 0 ? (
+            "No active mail to track yet. When customer orders flow in, they'll show up here automatically."
+          ) : (
+            <>
+              Tracking {mailers.length} customer{mailers.length === 1 ? "" : "s"} across all active campaigns.
+              {totalActive > 0 && (
+                <>
+                  {" "}
+                  <strong>{totalActive.toLocaleString()}</strong> active{" "}
+                  ({totalTracked.toLocaleString()} with USPS scans, {totalPending.toLocaleString()} awaiting first scan).
+                </>
+              )}
+              {totalExpired > 0 && (
+                <>
+                  {" "}
+                  <span className="text-stone">
+                    {totalExpired.toLocaleString()} archived (drops older than 30d, past USPS scan window).
+                  </span>
+                </>
+              )}
+            </>
+          )}
         </p>
       </div>
 

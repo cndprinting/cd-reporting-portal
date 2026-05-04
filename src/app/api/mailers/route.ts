@@ -57,15 +57,19 @@ export async function GET() {
         ["ACCEPTED", "IN_TRANSIT", "OUT_FOR_DELIVERY"].includes(r.status),
       )
       .reduce((s, r) => s + r._count, 0);
-    // "Pending" = imported but no USPS scan yet
+    // "Pending" = imported but no USPS scan yet (still in scan window)
     const pending = statusFor
       .filter((r) => r.status === "PENDING")
+      .reduce((s, r) => s + r._count, 0);
+    // "Expired" = drop date > 30d ago, past USPS IV-MTR retention window
+    const expired = statusFor
+      .filter((r) => r.status === "EXPIRED_NO_SCAN")
       .reduce((s, r) => s + r._count, 0);
     const undeliverable = statusFor
       .filter((r) => r.status === "UNDELIVERABLE")
       .reduce((s, r) => s + r._count, 0);
-    // Pieces that have hit the USPS network (excludes PENDING)
-    const trackedCount = pieces - pending;
+    // Pieces that have hit the USPS network (excludes PENDING + EXPIRED)
+    const trackedCount = pieces - pending - expired;
     const mids = midRows.filter((r) => r.companyId === c.id).map((r) => r.imbMailerId).filter(Boolean);
 
     return {
@@ -78,6 +82,7 @@ export async function GET() {
       deliveredCount: delivered,
       inTransitCount: inTransit,
       pendingCount: pending,
+      expiredCount: expired,
       undeliverableCount: undeliverable,
       trackedCount, // pieces with at least one scan
       // Delivery rate is more honest when computed against pieces actually
