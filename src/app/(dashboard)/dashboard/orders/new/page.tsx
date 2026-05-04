@@ -119,6 +119,14 @@ export default function NewOrderPage() {
   // Each module renders its own UI section + writes to moduleFields[moduleId].
   const [enabledModules, setEnabledModules] = useState<ModuleManifest[]>([]);
   const [moduleFields, setModuleFields] = useState<Record<string, Record<string, unknown>>>({});
+  // Module-driven pricing selection (e.g. land-investor rate card pick).
+  // When a module supplies a PricingCard, this replaces the standard
+  // template/custom-quote pricing path.
+  const [modulePricing, setModulePricing] = useState<{
+    pricePerPiece: number;
+    totalPrice: number;
+    details: Record<string, unknown>;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/templates").then((r) => r.json()).then((d) => setTemplates(d.templates ?? []));
@@ -181,11 +189,17 @@ export default function NewOrderPage() {
   const totalPrice =
     selectedTemplate && rowCount ? rowCount * selectedTemplate.pricePerPiece : 0;
 
+  // Customers with a module-supplied PricingCard skip template selection entirely
+  const usingModulePricing = enabledModules.some((m) => !!m.PricingCard);
+
   const canSubmit = useCustomQuote
     ? !!campaignId && customQuoteRequest.trim().length >= 10
     : useCustomDesign
       ? !!sheet && !!fileUrl && quality >= 0.6 && !!customDesignUrl && !!campaignId
-      : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
+      : usingModulePricing
+        ? !!sheet && !!fileUrl && quality >= 0.6 && !!campaignId &&
+          !!modulePricing && !modulePricing.details?.belowMinimum
+        : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
 
   const handleCustomDesignFile = async (file: File) => {
     setCustomDesignErr(null);
@@ -266,6 +280,23 @@ export default function NewOrderPage() {
             // Persona-module data passes through here too
             customFields:
               Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
+          }
+        : usingModulePricing && modulePricing
+        ? {
+            campaignId,
+            description: `Standard rate-card order — ${(modulePricing.details as { format?: string; size?: string }).format ?? ""} ${(modulePricing.details as { size?: string }).size ?? ""}`.trim(),
+            quantity: rowCount,
+            dropDate,
+            mailClass: "Marketing Mail",
+            mailShape: (modulePricing.details as { format?: string }).format ?? "letter",
+            pricePerPiece: modulePricing.pricePerPiece,
+            totalPrice: modulePricing.totalPrice,
+            // Stash the rate-card selection details in customFields under
+            // the module that produced it (so admin can audit the picker)
+            customFields: {
+              ...(Object.keys(moduleFields).length > 0 ? moduleFields : {}),
+              _pricing: modulePricing.details,
+            },
           }
         : {
             campaignId,
@@ -502,7 +533,26 @@ export default function NewOrderPage() {
         );
       })}
 
-      {/* STEP 2: PICK TEMPLATE */}
+      {/* MODULE PRICING — when a module ships its own rate card (e.g. Land
+          Investor), surface it here AFTER the list is uploaded so the
+          tier-based pricing reflects real qty. This REPLACES the standard
+          template picker for these customers. */}
+      {sheet && rowCount > 0 &&
+        enabledModules.map((mod) => {
+          const PC = mod.PricingCard;
+          if (!PC) return null;
+          return (
+            <PC
+              key={`pricing-${mod.id}`}
+              quantity={rowCount}
+              value={modulePricing}
+              onChange={setModulePricing}
+            />
+          );
+        })}
+
+      {/* STEP 2: PICK TEMPLATE — only when no module-supplied pricing is active */}
+      {!enabledModules.some((m) => !!m.PricingCard) && (
       <Card className={!sheet && !useCustomQuote ? "opacity-60 pointer-events-none" : ""}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -761,6 +811,7 @@ export default function NewOrderPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* STEP 3: PRICE + DROP DATE + SUBMIT */}
       <Card
@@ -875,6 +926,8 @@ export default function NewOrderPage() {
                   <span className="text-violet-700 text-sm font-medium">
                     Quote pending
                   </span>
+                ) : usingModulePricing && modulePricing ? (
+                  `$${modulePricing.totalPrice.toFixed(2)}`
                 ) : (
                   `$${totalPrice.toFixed(2)}`
                 )}

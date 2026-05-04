@@ -27,6 +27,7 @@
 
 import type { ModuleManifest } from "../registry";
 import { LandInvestorOrderFields } from "./OrderFields";
+import { LandInvestorPricingCardAdapter } from "./PricingCardAdapter";
 
 export const landInvestorModule: ModuleManifest = {
   id: "land-investor",
@@ -76,4 +77,5 @@ export const landInvestorModule: ModuleManifest = {
     },
   ],
   OrderFields: LandInvestorOrderFields,
+  PricingCard: LandInvestorPricingCardAdapter,
 };

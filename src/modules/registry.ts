@@ -48,6 +48,29 @@ export interface ModuleManifest {
    * customFields setter. Module owns its own UI here.
    */
   OrderFields?: ComponentType<ModuleOrderFieldsProps>;
+  /**
+   * Optional secondary component for module-specific pricing UI. Rendered
+   * separately from OrderFields, after the recipient list is uploaded
+   * (so the quantity is known). Module computes the per-piece price and
+   * total based on its own rate card and pushes a selection up via onChange.
+   *
+   * When a module exposes PricingCard, it REPLACES the standard template
+   * picker / custom-quote tiles for customers who have this module enabled.
+   */
+  PricingCard?: ComponentType<ModulePricingCardProps>;
+}
+
+export interface ModulePricingSelection {
+  pricePerPiece: number;
+  totalPrice: number;
+  /** Free-form payload describing what was selected (format, size, etc.) */
+  details: Record<string, unknown>;
+}
+
+export interface ModulePricingCardProps {
+  quantity: number;
+  value?: ModulePricingSelection | null;
+  onChange: (selection: ModulePricingSelection) => void;
 }
 
 export interface ModuleMergeVar {
