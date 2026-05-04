@@ -31,8 +31,15 @@ export async function GET(req: NextRequest) {
 
   const where = companyId ? { companyId } : {};
 
-  const [pieces, totalPieceCount, scanCount, deliveryDaily, statusGroups, recentPieces] =
-    await Promise.all([
+  const [
+    pieces,
+    totalPieceCount,
+    scanCount,
+    deliveryDaily,
+    statusGroups,
+    recentPieces,
+    operationGroups,
+  ] = await Promise.all([
       prisma.mailPiece.findMany({
         where,
         select: { id: true, status: true, daysToDeliver: true },
@@ -78,6 +85,11 @@ export async function GET(req: NextRequest) {
         take: 500,
         orderBy: [{ deliveredAt: "desc" }, { lastScanAt: "desc" }],
       }),
+      prisma.scanEvent.groupBy({
+        by: ["operation"],
+        where: companyId ? { mailPiece: { companyId } } : {},
+        _count: true,
+      }),
     ]);
 
   const statusCounts: Record<string, number> = {};
@@ -91,6 +103,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     companyId,
+    campaignId: "",
     totalQuantity: totalPieceCount,
     pieceCount: totalPieceCount,
     scanCount,
@@ -101,6 +114,11 @@ export async function GET(req: NextRequest) {
       date: d.day,
       delivered: Number(d.delivered),
     })),
+    operationBreakdown: operationGroups.map((g) => ({
+      operation: g.operation,
+      count: g._count,
+    })),
     pieces: recentPieces,
+    batches: [],
   });
 }

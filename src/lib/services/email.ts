@@ -49,7 +49,6 @@ export async function sendEmail(
  */
 export function brandedEmail(content: string, opts?: { previewText?: string }): string {
   const portal = process.env.PORTAL_URL ?? "https://marketing.cndprinting.com";
-  const logoUrl = `${portal}/logo-mailercity.png`;
   const preview = opts?.previewText ?? "";
   return `<!doctype html>
 <html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
@@ -59,7 +58,9 @@ ${preview ? `<div style="display:none;max-height:0;overflow:hidden;">${preview}<
   <tr><td align="center" style="padding:32px 16px;">
     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #E8E0D2;border-radius:8px;overflow:hidden;">
       <tr><td style="padding:24px 32px;border-bottom:1px solid #E8E0D2;background:#ffffff;text-align:center;">
-        <img src="${logoUrl}" alt="C&D MailerCity" style="height:48px;width:auto;display:inline-block;" />
+        <div style="font-family:Georgia,serif;font-size:22px;font-weight:500;color:#1A1814;letter-spacing:-0.01em;">
+          C&amp;D <span style="color:#B85C3D;font-style:italic;">MailerCity</span>
+        </div>
       </td></tr>
       <tr><td style="padding:32px;font-size:14px;line-height:1.6;color:#1A1814;">
         ${content}
