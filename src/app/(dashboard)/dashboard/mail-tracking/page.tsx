@@ -75,17 +75,35 @@ const STATUS_COLORS: Record<string, string> = {
   UNDELIVERABLE: "bg-rose-100 text-rose-700",
 };
 
+interface CompanyOption {
+  id: string;
+  name: string;
+  pieceCount: number;
+}
+
 export default function MailTrackingPage() {
   const [data, setData] = useState<MailTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [campaignId] = useState("camp-1"); // TODO: pull from selector
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companyId, setCompanyId] = useState<string>(""); // "" = all customers (admin)
   const [openPieceId, setOpenPieceId] = useState<string | null>(null);
+
+  // Load list of customers (admins see all; customers see only their own)
+  useEffect(() => {
+    fetch("/api/mailers")
+      .then((r) => r.json())
+      .then((d) => setCompanies(d.mailers ?? []))
+      .catch(() => setCompanies([]));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/mail-tracking/${campaignId}`)
+    const url = companyId
+      ? `/api/mail-tracking/overview?companyId=${companyId}`
+      : "/api/mail-tracking/overview";
+    fetch(url)
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled) setData(d);
@@ -94,7 +112,7 @@ export default function MailTrackingPage() {
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [companyId]);
 
   if (loading || !data) {
     return (
@@ -104,14 +122,11 @@ export default function MailTrackingPage() {
     );
   }
 
-  const delivered =
-    (data.statusCounts.DELIVERED ?? 0) + (data.statusCounts.DELIVERED_INFERRED ?? 0);
-  const inTransit =
-    (data.statusCounts.IN_TRANSIT ?? 0) +
-    (data.statusCounts.ACCEPTED ?? 0) +
-    (data.statusCounts.PENDING ?? 0);
-  const ofd = data.statusCounts.OUT_FOR_DELIVERY ?? 0;
-  const undeliv = data.statusCounts.UNDELIVERABLE ?? 0;
+  const sc = data.statusCounts ?? {};
+  const delivered = (sc.DELIVERED ?? 0) + (sc.DELIVERED_INFERRED ?? 0);
+  const inTransit = (sc.IN_TRANSIT ?? 0) + (sc.ACCEPTED ?? 0) + (sc.PENDING ?? 0);
+  const ofd = sc.OUT_FOR_DELIVERY ?? 0;
+  const undeliv = sc.UNDELIVERABLE ?? 0;
 
   const filtered = data.pieces.filter((p) => {
     const q = search.toLowerCase().trim();
@@ -139,7 +154,23 @@ export default function MailTrackingPage() {
             </p>
           </div>
         </div>
-        <Badge className="bg-emerald-100 text-emerald-700">Live via IV-MTR</Badge>
+        <div className="flex items-center gap-3">
+          {companies.length > 1 && (
+            <select
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              className="h-9 rounded border border-line bg-white px-3 text-sm"
+            >
+              <option value="">All customers</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.pieceCount.toLocaleString()})
+                </option>
+              ))}
+            </select>
+          )}
+          <Badge className="bg-emerald-100 text-emerald-700">Live via IV-MTR</Badge>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -302,7 +333,7 @@ export default function MailTrackingPage() {
               </div>
             </div>
             <a
-              href={`/api/mail-pieces/undeliverable?campaignId=${campaignId}`}
+              href={`/api/mail-pieces/undeliverable${companyId ? `?companyId=${companyId}` : ""}`}
               download
               className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-rose-700 hover:text-rose-900 bg-white border border-rose-200 rounded px-3 py-1.5"
             >
@@ -394,7 +425,7 @@ export default function MailTrackingPage() {
               Piece data updates every 15 min from USPS IV-MTR feed
             </div>
             <a
-              href={`/api/mail-pieces/undeliverable?campaignId=${campaignId}`}
+              href={`/api/mail-pieces/undeliverable${companyId ? `?companyId=${companyId}` : ""}`}
               download
               className="text-brand-600 hover:underline font-medium"
             >
