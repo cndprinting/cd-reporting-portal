@@ -14,7 +14,7 @@
  */
 
 import type { IVScanRecord } from "./iv-mtr-ingest";
-import { parseIMb } from "./imb";
+import { parseIMb, extractCleanIMb } from "./imb";
 
 export interface ParsedMailDatPiece {
   imb: string;
@@ -49,11 +49,23 @@ export interface ParsedMailDatJob {
  */
 export function parsePBC(content: string): { jobId: string; pieceId: string; imb: string }[] {
   const lines = content.split(/\r?\n/).filter((l) => l.length > 31);
-  return lines.map((line) => ({
-    jobId: line.slice(0, 8).trim(),
-    pieceId: line.slice(8, 30).trim(),
-    imb: line.slice(30, 61).replace(/[^0-9]/g, "").trim(),
-  }));
+  const out: { jobId: string; pieceId: string; imb: string }[] = [];
+  for (const line of lines) {
+    // Pull a generous window around the IMb position. The IDEAlliance Mail.dat
+    // .pbc layout has the IMb at offset 30 with width 31, but in practice files
+    // we've seen put the actual 29-digit IMb at offset 31 with surrounding
+    // filler chars. extractCleanIMb() validates DMM 708 structural rules and
+    // auto-trims off-by-one garbage to recover the real IMb.
+    const rawWindow = line.slice(30, 62).replace(/[^0-9]/g, "");
+    const cleanImb = extractCleanIMb(rawWindow);
+    if (!cleanImb) continue;
+    out.push({
+      jobId: line.slice(0, 8).trim(),
+      pieceId: line.slice(8, 30).trim(),
+      imb: cleanImb,
+    });
+  }
+  return out;
 }
 
 /**
@@ -92,8 +104,12 @@ export function parseIMbCSV(csv: string): ParsedMailDatPiece[] {
   const pieces: ParsedMailDatPiece[] = [];
   for (const line of lines.slice(1)) {
     const cols = splitCSVLine(line);
-    const imb = (cols[iImb] ?? "").replace(/\D/g, "");
-    if (!imb || !parseIMb(imb)) continue;
+    const rawImb = (cols[iImb] ?? "").replace(/\D/g, "");
+    if (!rawImb) continue;
+    // Try strict-clean first (handles off-by-one slice garbage); fall back to
+    // the lenient parser for already-clean IMbs.
+    const imb = extractCleanIMb(rawImb) ?? (parseIMb(rawImb) ? rawImb : null);
+    if (!imb) continue;
     pieces.push({
       imb,
       recipientName: iName >= 0 ? cols[iName] : undefined,
@@ -152,8 +168,10 @@ export function parseIMbJSON(json: string): ParsedMailDatPiece[] {
       }
       return undefined;
     };
-    const imb = (get("imb", "barcode", "intelligentmailbarcode") ?? "").replace(/\D/g, "");
-    if (!imb || !parseIMb(imb)) continue;
+    const rawImb = (get("imb", "barcode", "intelligentmailbarcode") ?? "").replace(/\D/g, "");
+    if (!rawImb) continue;
+    const imb = extractCleanIMb(rawImb) ?? (parseIMb(rawImb) ? rawImb : null);
+    if (!imb) continue;
     out.push({
       imb,
       recipientName: get("name", "recipientname", "fullname"),

@@ -243,15 +243,24 @@ export async function ingestIVFile(input: {
   }
 
   try {
-    // Preload all MailPiece IDs for the IMbs in this batch in one query
+    // Preload MailPieces by the 20-digit IMb prefix (BC+STID+MID+Serial).
+    // This is what USPS scans uniquely identify a piece by (imbTrackingCode);
+    // the routing portion can vary in width (ZIP+4 = 9 chars, DPBC = 11 chars)
+    // depending on how the piece was printed vs how USPS scanned it. Matching
+    // by the 20-digit prefix sidesteps any routing-width mismatch.
     const imbs = [...new Set(records.map((r) => r.imb))];
-    const pieces = imbs.length
-      ? await prisma.mailPiece.findMany({
-          where: { imb: { in: imbs } },
-          select: { id: true, imb: true, campaignId: true },
-        })
+    const prefixes = [...new Set(imbs.map((i) => i.slice(0, 20)))];
+    const pieces = prefixes.length
+      ? await prisma.$queryRaw<{ id: string; imb: string; campaignId: string }[]>`
+          SELECT id, imb, "campaignId"
+            FROM "MailPiece"
+           WHERE substring(imb, 1, 20) = ANY(${prefixes}::text[])
+        `
       : [];
-    const pieceByImb = new Map(pieces.map((p) => [p.imb, p]));
+    // Index by 20-digit prefix so scan lookup matches even when routing differs
+    const pieceByImb = new Map<string, { id: string; imb: string; campaignId: string }>(
+      pieces.map((p) => [p.imb.slice(0, 20), p]),
+    );
 
     // Build bulk createMany payloads — much faster than N sequential upserts.
     // We rely on the unique constraint (imb, scanDatetime, operationCode,
@@ -270,7 +279,8 @@ export async function ingestIVFile(input: {
     >();
 
     for (const rec of records) {
-      const piece = pieceByImb.get(rec.imb);
+      // Match by the 20-digit BC+STID+MID+Serial prefix (routing may differ)
+      const piece = pieceByImb.get(rec.imb.slice(0, 20));
       if (!piece) {
         unknownImbs++;
         if (!unmatchedSamples.has(rec.imb)) {

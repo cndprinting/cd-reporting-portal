@@ -42,6 +42,60 @@ export function parseIMb(imb: string): ParsedIMb | null {
   return { barcodeId, serviceType, mailerId, serial, routingZip, mailerIdLength };
 }
 
+/**
+ * Strict version of parseIMb that also enforces USPS structural rules:
+ *   - Each digit of the Barcode ID must be 0-4 (DMM 708 §708.4.3.4)
+ *   - Service Type Identifier must look plausible (not all zeros, etc.)
+ *   - Routing zip, when present, must be 5/9/11 digits (already enforced by length)
+ * This catches off-by-one slice errors in fixed-width parsers, which produce
+ * structurally-shaped strings that aren't real USPS barcodes.
+ */
+export function parseIMbStrict(imb: string): ParsedIMb | null {
+  const parsed = parseIMb(imb);
+  if (!parsed) return null;
+  // BC digits limited to 0-4 — guarantees we're at the right offset
+  if (!/^[0-4][0-4]$/.test(parsed.barcodeId)) return null;
+  // STID can't be all zeros
+  if (parsed.serviceType === "000") return null;
+  return parsed;
+}
+
+/**
+ * Given a raw IMb-ish string that may have leading/trailing garbage chars
+ * from a fixed-width slice that was off-by-one, find the embedded valid IMb.
+ *
+ * Tries the input as-is first, then progressively trims 1 char from each end
+ * up to 2 chars total (covers off-by-1, off-by-2, and asymmetric shifts).
+ * Returns the cleaned IMb digits (20/25/29/31 chars) or null if nothing valid.
+ *
+ * Real-world bug this fixes: parsePBC was slicing 31 chars from the .pbc PBC
+ * file but the actual IMb field is 29 chars with 1 filler char on each side.
+ * Result was 49,135 stored IMbs with extra leading + trailing digits — which
+ * looked structurally valid (31 digits) but had bogus BC values like "83",
+ * "91" that violate DMM 708's 0-4-per-digit rule.
+ */
+export function extractCleanIMb(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 20) return null;
+
+  // Try every viable substring length and offset, prefer the longest valid one.
+  // Candidates cover: as-is, drop-1-front, drop-1-back, drop-1-each, drop-2-front,
+  // drop-2-back, drop-1-front-2-back, drop-2-front-1-back, drop-2-each.
+  const candidates: string[] = [];
+  for (let lead = 0; lead <= 2; lead++) {
+    for (let trail = 0; trail <= 2; trail++) {
+      const sliced = digits.slice(lead, digits.length - trail);
+      if ([20, 25, 29, 31].includes(sliced.length)) candidates.push(sliced);
+    }
+  }
+  // Prefer longest valid IMb (more routing data = better matching)
+  candidates.sort((a, b) => b.length - a.length);
+  for (const c of candidates) {
+    if (parseIMbStrict(c)) return c;
+  }
+  return null;
+}
+
 /** Build a 31-digit IMb from components (caller is responsible for zip-pad). */
 export function buildIMb(p: {
   barcodeId: string;
