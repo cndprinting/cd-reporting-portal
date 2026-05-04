@@ -1,34 +1,33 @@
 "use client";
 
+/**
+ * Mail Tracking — multi-customer rollup view.
+ *
+ * Layout (top to bottom):
+ *   1. Header + customer scope selector
+ *   2. Top KPI strip (only meaningful metrics for current data)
+ *   3. Per-customer rollup table (admin "All customers" view) OR campaign list (single-customer)
+ *   4. Scan funnel + recent scan feed (live activity proof)
+ *   5. Pieces table (filterable)
+ */
+
 import { useEffect, useState } from "react";
+import { Mail, CheckCircle2, MapPin, Clock } from "lucide-react";
 import {
-  Mail,
-  Truck,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  MapPin,
-  Home,
-  PackageSearch,
-} from "lucide-react";
-import {
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as RTooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
 } from "recharts";
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { PieceDetailModal } from "@/components/mail-tracking/piece-detail-modal";
 
-interface MailPieceRow {
+interface PieceRow {
   id: string;
   imb: string;
   recipientName: string | null;
@@ -41,39 +40,48 @@ interface MailPieceRow {
   deliveredAt: string | null;
   daysToDeliver: number | null;
   isSeed: boolean;
+  company?: { id: string; name: string } | null;
 }
 
-interface MailTrackingData {
-  campaignId: string;
+interface CustomerRollup {
+  id: string;
+  name: string;
+  pieceCount: number;
+  scanCount: number;
+  acceptedCount: number;
+  deliveredCount: number;
+  lastScanAt: string | null;
+}
+
+interface RecentScan {
+  id: string;
+  scanDatetime: string;
+  operation: string;
+  operationDesc: string | null;
+  facilityCity: string | null;
+  facilityState: string | null;
+  imb?: string;
+  recipientName?: string | null;
+  destinationCity?: string | null;
+  destinationState?: string | null;
+  companyId?: string;
+  companyName?: string;
+}
+
+interface OverviewData {
+  companyId: string | null;
   totalQuantity: number;
   pieceCount: number;
+  scanCount: number;
   statusCounts: Record<string, number>;
   deliveryRate: number;
   avgDaysToDeliver: number;
   deliveryCurve: { date: string; delivered: number }[];
   operationBreakdown: { operation: string; count: number }[];
-  pieces: MailPieceRow[];
-  batches: Array<{
-    id: string;
-    batchName: string;
-    quantity: number;
-    dropDate: string;
-    expectedInHomeStart: string | null;
-    expectedInHomeEnd: string | null;
-    deliveredCount: number;
-    status: string;
-  }>;
+  perCustomer: CustomerRollup[];
+  recentScans: RecentScan[];
+  pieces: PieceRow[];
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  DELIVERED: "bg-emerald-100 text-emerald-700",
-  DELIVERED_INFERRED: "bg-teal-100 text-teal-700",
-  OUT_FOR_DELIVERY: "bg-blue-100 text-blue-700",
-  IN_TRANSIT: "bg-amber-100 text-amber-700",
-  ACCEPTED: "bg-slate-100 text-slate-700",
-  PENDING: "bg-gray-100 text-gray-600",
-  UNDELIVERABLE: "bg-rose-100 text-rose-700",
-};
 
 interface CompanyOption {
   id: string;
@@ -81,15 +89,45 @@ interface CompanyOption {
   pieceCount: number;
 }
 
+const FUNNEL_ORDER = [
+  "ORIGIN_ACCEPTANCE",
+  "ORIGIN_PROCESSED",
+  "IN_TRANSIT",
+  "DESTINATION_PROCESSED",
+  "DESTINATION_DELIVERY",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+];
+
+const FUNNEL_LABELS: Record<string, string> = {
+  ORIGIN_ACCEPTANCE: "Picked up at C&D",
+  ORIGIN_PROCESSED: "Sorted at origin",
+  IN_TRANSIT: "Moving between facilities",
+  DESTINATION_PROCESSED: "At destination sort",
+  DESTINATION_DELIVERY: "At delivery unit",
+  OUT_FOR_DELIVERY: "Out for delivery",
+  DELIVERED: "Delivered",
+};
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "just now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
 export default function MailTrackingPage() {
-  const [data, setData] = useState<MailTrackingData | null>(null);
+  const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [companyId, setCompanyId] = useState<string>(""); // "" = all customers (admin)
+  const [companyId, setCompanyId] = useState<string>("");
   const [openPieceId, setOpenPieceId] = useState<string | null>(null);
 
-  // Load list of customers (admins see all; customers see only their own)
   useEffect(() => {
     fetch("/api/mailers")
       .then((r) => r.json())
@@ -116,7 +154,7 @@ export default function MailTrackingPage() {
 
   if (loading || !data) {
     return (
-      <div className="flex items-center justify-center h-96 text-gray-500">
+      <div className="flex items-center justify-center h-96 text-stone">
         Loading mail tracking…
       </div>
     );
@@ -124,38 +162,54 @@ export default function MailTrackingPage() {
 
   const sc = data.statusCounts ?? {};
   const delivered = (sc.DELIVERED ?? 0) + (sc.DELIVERED_INFERRED ?? 0);
-  const inTransit = (sc.IN_TRANSIT ?? 0) + (sc.ACCEPTED ?? 0) + (sc.PENDING ?? 0);
-  const ofd = sc.OUT_FOR_DELIVERY ?? 0;
+  const accepted =
+    (sc.ACCEPTED ?? 0) +
+    (sc.IN_TRANSIT ?? 0) +
+    (sc.OUT_FOR_DELIVERY ?? 0);
+  const pending = sc.PENDING ?? 0;
   const undeliv = sc.UNDELIVERABLE ?? 0;
+  const hasAnyScans = (data.scanCount ?? 0) > 0;
+  const hasDeliveries = delivered > 0;
 
-  const filtered = data.pieces.filter((p) => {
-    const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      p.imb.includes(q) ||
-      (p.recipientName ?? "").toLowerCase().includes(q) ||
-      (p.zip5 ?? "").includes(q) ||
-      (p.city ?? "").toLowerCase().includes(q)
-    );
-  });
+  const selectedCompany = companies.find((c) => c.id === companyId);
+  const scopeLabel = companyId
+    ? selectedCompany?.name ?? "Customer"
+    : `All customers (${data.perCustomer?.length ?? 0})`;
+
+  // Build funnel data in proper order, only including non-zero stages
+  const funnelData = FUNNEL_ORDER.map((op) => {
+    const found = data.operationBreakdown.find((b) => b.operation === op);
+    return {
+      operation: op,
+      label: FUNNEL_LABELS[op],
+      count: found?.count ?? 0,
+    };
+  }).filter((d) => d.count > 0);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-line pb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-brand-100 text-brand-600">
             <Mail className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mail Tracking</h1>
-            <p className="text-sm text-gray-500">
-              USPS IV-MTR barcode tracking &middot; IMb-level delivery visibility
+            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone">
+              Mail Tracking · {scopeLabel}
+            </div>
+            <h1 className="text-2xl font-display font-medium text-ink">
+              {hasAnyScans
+                ? `${data.scanCount.toLocaleString()} scans on ${(accepted + delivered).toLocaleString()} pieces`
+                : "No scans received yet"}
+            </h1>
+            <p className="text-sm text-stone mt-1">
+              USPS IV-MTR · live barcode tracking · {data.pieceCount.toLocaleString()} pieces in scope
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {companies.length > 1 && (
+          {companies.length > 0 && (
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
@@ -164,178 +218,253 @@ export default function MailTrackingPage() {
               <option value="">All customers</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.pieceCount.toLocaleString()})
+                  {c.name}
                 </option>
               ))}
             </select>
           )}
-          <Badge className="bg-emerald-100 text-emerald-700">Live via IV-MTR</Badge>
+          <Badge variant="success">Live via IV-MTR</Badge>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — only the meaningful ones for this dataset */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          label="Delivery Rate"
-          value={data.deliveryRate * 100}
+          label="Total Pieces"
+          value={data.pieceCount}
+          icon={Mail}
+          iconColor="text-blue-600 bg-blue-100"
+          helpText="Imported into the portal across all campaigns"
+        />
+        <KPICard
+          label="Scanned by USPS"
+          value={accepted + delivered}
           icon={CheckCircle2}
           iconColor="text-emerald-600 bg-emerald-100"
-          format="percent"
-          helpText={`${delivered.toLocaleString()} of ${data.totalQuantity.toLocaleString()} pieces scanned as delivered`}
+          helpText={
+            hasAnyScans
+              ? `${(((accepted + delivered) / Math.max(1, data.pieceCount)) * 100).toFixed(1)}% of pieces have at least one scan`
+              : "No scans received yet"
+          }
         />
         <KPICard
-          label="In Transit"
-          value={inTransit}
-          icon={Truck}
-          iconColor="text-amber-600 bg-amber-100"
-          helpText="Pieces accepted and moving through USPS network"
+          label="Total Scans"
+          value={data.scanCount}
+          icon={MapPin}
+          iconColor="text-violet-600 bg-violet-100"
+          helpText="Each USPS facility scan is one event"
         />
         <KPICard
-          label="Out For Delivery"
-          value={ofd}
-          icon={Home}
-          iconColor="text-blue-600 bg-blue-100"
-          helpText="On carrier route today — expect delivery scan within 24h"
-        />
-        <KPICard
-          label="Avg Days to Deliver"
-          value={Number(data.avgDaysToDeliver.toFixed(1))}
+          label="Delivered"
+          value={delivered}
           icon={Clock}
-          iconColor="text-indigo-600 bg-indigo-100"
-          helpText="From first acceptance scan to final delivery scan"
+          iconColor={delivered > 0 ? "text-emerald-600 bg-emerald-100" : "text-stone bg-paper-soft"}
+          helpText={
+            hasDeliveries
+              ? `${(data.deliveryRate * 100).toFixed(1)}% delivery rate`
+              : "No DELIVERED scans yet (mail still in transit)"
+          }
         />
       </div>
 
-      {/* Delivery curve + operation funnel */}
+      {/* Per-customer rollup (only on "All customers" admin view) */}
+      {!companyId && data.perCustomer && data.perCustomer.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Per-Customer Rollup</CardTitle>
+            <p className="text-xs text-stone">
+              Click a row to filter the rest of the page to that customer.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-stone uppercase tracking-wider border-b border-line">
+                  <tr>
+                    <th className="py-2 font-medium">Customer</th>
+                    <th className="text-right font-medium">Pieces</th>
+                    <th className="text-right font-medium">Pieces with scans</th>
+                    <th className="text-right font-medium">Delivered</th>
+                    <th className="text-right font-medium">Total scans</th>
+                    <th className="text-right font-medium">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.perCustomer.map((c) => {
+                    const pctScanned =
+                      c.pieceCount > 0 ? (c.acceptedCount / c.pieceCount) * 100 : 0;
+                    return (
+                      <tr
+                        key={c.id}
+                        onClick={() => setCompanyId(c.id)}
+                        className="border-b border-line last:border-0 cursor-pointer hover:bg-paper-soft transition-colors"
+                      >
+                        <td className="py-3 font-medium text-ink">{c.name}</td>
+                        <td className="text-right">{c.pieceCount.toLocaleString()}</td>
+                        <td className="text-right">
+                          {c.acceptedCount.toLocaleString()}{" "}
+                          <span className="text-stone text-xs">({pctScanned.toFixed(0)}%)</span>
+                        </td>
+                        <td className="text-right">{c.deliveredCount.toLocaleString()}</td>
+                        <td className="text-right text-stone">{c.scanCount.toLocaleString()}</td>
+                        <td className="text-right text-stone text-xs">
+                          {c.lastScanAt ? timeAgo(c.lastScanAt) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Funnel + recent scans */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Delivery Curve</CardTitle>
-            <p className="text-sm text-gray-500">Pieces delivered per day</p>
+            <CardTitle>Scan Funnel</CardTitle>
+            <p className="text-xs text-stone">
+              How many scans hit each USPS pipeline stage. Drop-off = pieces still in earlier stages.
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.deliveryCurve}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) =>
-                    new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                  }
-                />
-                <YAxis tick={{ fontSize: 11 }} />
-                <RTooltip />
-                <Line
-                  type="monotone"
-                  dataKey="delivered"
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ r: 3 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {funnelData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={funnelData} layout="vertical" margin={{ left: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D2" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    tick={{ fontSize: 11 }}
+                    width={170}
+                  />
+                  <RTooltip />
+                  <Bar dataKey="count" fill="#B85C3D" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-stone text-sm">
+                No scans yet — funnel populates as USPS reports activity.
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Scan Funnel</CardTitle>
-            <p className="text-sm text-gray-500">Pieces that hit each stage</p>
+            <CardTitle>Recent Activity</CardTitle>
+            <p className="text-xs text-stone">Latest USPS scans coming in</p>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={data.operationBreakdown.map((o) => ({
-                  ...o,
-                  label: o.operation.replace(/_/g, " "),
-                }))}
-                layout="vertical"
-                margin={{ left: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} width={130} />
-                <RTooltip />
-                <Bar dataKey="count" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="p-0">
+            {data.recentScans.length === 0 ? (
+              <div className="text-center py-12 text-stone text-sm px-4">
+                No scans received yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-line max-h-[400px] overflow-y-auto">
+                {data.recentScans.slice(0, 50).map((s) => (
+                  <div key={s.id} className="px-4 py-2.5 text-xs hover:bg-paper-soft">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-ink truncate">
+                        {s.companyName ?? "—"}
+                      </span>
+                      <span className="text-stone text-[10px] shrink-0">
+                        {timeAgo(s.scanDatetime)}
+                      </span>
+                    </div>
+                    <div className="text-stone mt-0.5 truncate">
+                      {FUNNEL_LABELS[s.operation] ?? s.operation}
+                      {s.facilityCity &&
+                        ` · ${s.facilityCity}${s.facilityState ? `, ${s.facilityState}` : ""}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Batches */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mail Drops</CardTitle>
-          <p className="text-sm text-gray-500">Batch-level rollup with in-home windows</p>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-gray-500 border-b">
-                <tr>
-                  <th className="py-2">Batch</th>
-                  <th>Drop Date</th>
-                  <th>Expected In-Home</th>
-                  <th className="text-right">Quantity</th>
-                  <th className="text-right">Delivered</th>
-                  <th className="text-right">Delivery %</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.batches.map((b) => (
-                  <tr key={b.id} className="border-b last:border-0">
-                    <td className="py-3 font-medium">{b.batchName}</td>
-                    <td>{new Date(b.dropDate).toLocaleDateString()}</td>
-                    <td className="text-gray-600">
-                      {b.expectedInHomeStart
-                        ? `${new Date(b.expectedInHomeStart).toLocaleDateString()} – ${
-                            b.expectedInHomeEnd
-                              ? new Date(b.expectedInHomeEnd).toLocaleDateString()
-                              : "?"
-                          }`
-                        : "—"}
-                    </td>
-                    <td className="text-right">{b.quantity.toLocaleString()}</td>
-                    <td className="text-right">{b.deliveredCount.toLocaleString()}</td>
-                    <td className="text-right">
-                      {b.quantity ? ((b.deliveredCount / b.quantity) * 100).toFixed(1) : "0.0"}%
-                    </td>
-                    <td>
-                      <Badge className="bg-slate-100 text-slate-700 capitalize">
-                        {b.status.replace(/_/g, " ")}
-                      </Badge>
-                    </td>
+      {/* Recent piece-level activity (last 50 pieces with scans) */}
+      {data.pieces.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recently Scanned Pieces</CardTitle>
+            <p className="text-xs text-stone">
+              Click a row for the full scan timeline of that piece.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-stone uppercase tracking-wider border-b border-line">
+                  <tr>
+                    {!companyId && <th className="py-2 font-medium">Customer</th>}
+                    <th className="py-2 font-medium">Recipient</th>
+                    <th className="font-medium">Destination</th>
+                    <th className="font-medium">Status</th>
+                    <th className="font-medium">First scan</th>
+                    <th className="font-medium">Delivered</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {data.pieces.slice(0, 100).map((p) => (
+                    <tr
+                      key={p.id}
+                      onClick={() => setOpenPieceId(p.id)}
+                      className="border-b border-line last:border-0 cursor-pointer hover:bg-paper-soft"
+                    >
+                      {!companyId && (
+                        <td className="py-2 text-stone">{p.company?.name ?? "—"}</td>
+                      )}
+                      <td className="py-2">{p.recipientName ?? <span className="text-stone">—</span>}</td>
+                      <td className="text-stone">
+                        {[p.city, p.state, p.zip5].filter(Boolean).join(", ") || "—"}
+                      </td>
+                      <td>
+                        <Badge
+                          variant={
+                            p.status === "DELIVERED" || p.status === "DELIVERED_INFERRED"
+                              ? "success"
+                              : p.status === "UNDELIVERABLE"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {p.status}
+                        </Badge>
+                      </td>
+                      <td className="text-stone text-xs">
+                        {p.firstScanAt ? new Date(p.firstScanAt).toLocaleString() : "—"}
+                      </td>
+                      <td className="text-stone text-xs">
+                        {p.deliveredAt ? new Date(p.deliveredAt).toLocaleDateString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Undeliverable alert */}
       {undeliv > 0 && (
-        <Card className="border-rose-200 bg-rose-50">
-          <CardContent className="py-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-rose-600" />
-              <div className="text-sm">
-                <div className="font-semibold text-rose-900">
-                  {undeliv.toLocaleString()} undeliverable pieces
-                </div>
-                <div className="text-rose-700">
-                  USPS reported UAA scans (bad address, vacant, refused). Export the list to
-                  update your address hygiene.
-                </div>
-              </div>
+        <Card className="border-rose-200 bg-rose-50/30">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="text-sm">
+              <strong className="text-rose-900">{undeliv.toLocaleString()} undeliverable</strong>{" "}
+              <span className="text-rose-700">
+                — UAA scans (bad address, vacant, refused). Worth cleansing the list.
+              </span>
             </div>
             <a
               href={`/api/mail-pieces/undeliverable${companyId ? `?companyId=${companyId}` : ""}`}
               download
-              className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-rose-700 hover:text-rose-900 bg-white border border-rose-200 rounded px-3 py-1.5"
+              className="text-sm font-medium text-rose-700 hover:text-rose-900 bg-white border border-rose-200 rounded px-3 py-1.5"
             >
               Download CSV
             </a>
@@ -343,99 +472,10 @@ export default function MailTrackingPage() {
         </Card>
       )}
 
-      {/* Piece-level search */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <div>
-            <CardTitle>Piece-Level Tracking</CardTitle>
-            <p className="text-sm text-gray-500">
-              Look up any mailpiece by IMb, recipient, city or ZIP
-            </p>
-          </div>
-          <div className="w-72">
-            <Input
-              placeholder="Search IMb / name / ZIP…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-gray-500 border-b">
-                <tr>
-                  <th className="py-2">IMb</th>
-                  <th>Recipient</th>
-                  <th>Destination</th>
-                  <th>Status</th>
-                  <th>First Scan</th>
-                  <th>Delivered</th>
-                  <th className="text-right">Days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.slice(0, 100).map((p) => (
-                  <tr
-                    key={p.id}
-                    onClick={() => setOpenPieceId(p.id)}
-                    className="border-b last:border-0 hover:bg-brand-50 cursor-pointer"
-                  >
-                    <td className="py-2 font-mono text-xs text-gray-700">
-                      {p.isSeed && (
-                        <Badge className="mr-2 bg-indigo-100 text-indigo-700 text-[10px]">
-                          SEED
-                        </Badge>
-                      )}
-                      {p.imb.slice(0, 20)}…
-                    </td>
-                    <td>{p.recipientName ?? "—"}</td>
-                    <td className="text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {p.city}, {p.state} {p.zip5}
-                      </div>
-                    </td>
-                    <td>
-                      <Badge className={STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-600"}>
-                        {p.status.replace(/_/g, " ")}
-                      </Badge>
-                    </td>
-                    <td className="text-gray-600 text-xs">
-                      {p.firstScanAt ? new Date(p.firstScanAt).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="text-gray-600 text-xs">
-                      {p.deliveredAt ? new Date(p.deliveredAt).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="text-right">{p.daysToDeliver ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length > 100 && (
-              <div className="py-3 text-center text-xs text-gray-500">
-                Showing first 100 of {filtered.length.toLocaleString()} pieces — refine your
-                search or export to see more.
-              </div>
-            )}
-          </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-2">
-              <PackageSearch className="h-4 w-4" />
-              Piece data updates every 15 min from USPS IV-MTR feed
-            </div>
-            <a
-              href={`/api/mail-pieces/undeliverable${companyId ? `?companyId=${companyId}` : ""}`}
-              download
-              className="text-brand-600 hover:underline font-medium"
-            >
-              Export list (CSV)
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      <PieceDetailModal pieceId={openPieceId} onClose={() => setOpenPieceId(null)} />
+      <PieceDetailModal
+        pieceId={openPieceId}
+        onClose={() => setOpenPieceId(null)}
+      />
     </div>
   );
 }

@@ -92,6 +92,81 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+  // Per-customer rollup (only for "All customers" admin view)
+  const perCustomer: Array<{
+    id: string;
+    name: string;
+    pieceCount: number;
+    scanCount: number;
+    acceptedCount: number;
+    deliveredCount: number;
+    lastScanAt: string | null;
+  }> = [];
+  if (!companyId && session.role !== "CUSTOMER") {
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        name: string;
+        pieceCount: bigint;
+        scanCount: bigint;
+        acceptedCount: bigint;
+        deliveredCount: bigint;
+        lastScanAt: Date | null;
+      }>
+    >`
+      SELECT
+        c.id,
+        c.name,
+        COUNT(DISTINCT mp.id)::bigint AS "pieceCount",
+        COUNT(se.id)::bigint AS "scanCount",
+        COUNT(DISTINCT mp.id) FILTER (WHERE mp."firstScanAt" IS NOT NULL)::bigint AS "acceptedCount",
+        COUNT(DISTINCT mp.id) FILTER (WHERE mp.status IN ('DELIVERED','DELIVERED_INFERRED'))::bigint AS "deliveredCount",
+        MAX(se."scanDatetime") AS "lastScanAt"
+      FROM "Company" c
+      LEFT JOIN "MailPiece" mp ON mp."companyId" = c.id
+      LEFT JOIN "ScanEvent" se ON se."mailPieceId" = mp.id
+      WHERE c."isActive" = true
+      GROUP BY c.id, c.name
+      HAVING COUNT(DISTINCT mp.id) > 0
+      ORDER BY "scanCount" DESC, c.name ASC
+    `;
+    for (const r of rows) {
+      perCustomer.push({
+        id: r.id,
+        name: r.name,
+        pieceCount: Number(r.pieceCount),
+        scanCount: Number(r.scanCount),
+        acceptedCount: Number(r.acceptedCount),
+        deliveredCount: Number(r.deliveredCount),
+        lastScanAt: r.lastScanAt ? r.lastScanAt.toISOString() : null,
+      });
+    }
+  }
+
+  // Recent scan feed — last 50 scans, with company + facility info
+  const recentScans = await prisma.scanEvent.findMany({
+    where: companyId ? { mailPiece: { companyId } } : {},
+    orderBy: { scanDatetime: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      scanDatetime: true,
+      operation: true,
+      operationDesc: true,
+      facilityCity: true,
+      facilityState: true,
+      mailPiece: {
+        select: {
+          imb: true,
+          recipientName: true,
+          city: true,
+          state: true,
+          company: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
   const statusCounts: Record<string, number> = {};
   for (const g of statusGroups) statusCounts[g.status] = g._count;
 
@@ -117,6 +192,21 @@ export async function GET(req: NextRequest) {
     operationBreakdown: operationGroups.map((g) => ({
       operation: g.operation,
       count: g._count,
+    })),
+    perCustomer,
+    recentScans: recentScans.map((s) => ({
+      id: s.id,
+      scanDatetime: s.scanDatetime.toISOString(),
+      operation: s.operation,
+      operationDesc: s.operationDesc,
+      facilityCity: s.facilityCity,
+      facilityState: s.facilityState,
+      imb: s.mailPiece?.imb,
+      recipientName: s.mailPiece?.recipientName,
+      destinationCity: s.mailPiece?.city,
+      destinationState: s.mailPiece?.state,
+      companyId: s.mailPiece?.company?.id,
+      companyName: s.mailPiece?.company?.name,
     })),
     pieces: recentPieces,
     batches: [],
