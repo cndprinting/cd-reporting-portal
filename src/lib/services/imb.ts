@@ -126,24 +126,69 @@ export function* generateSerials(startSerial: string, count: number): Generator<
   }
 }
 
-/** Map a USPS operation code (from IV-MTR) to our normalized enum. */
+/**
+ * Map a USPS operation code (from IV-MTR) to our normalized enum.
+ *
+ * Modern IV-MTR push uses 3-digit codes. Codes seen in production from
+ * C&D's feed: 483, 484, 517, 891, 893, 918, 919.
+ *
+ * Bucket strategy by code range (USPS Mail.dat 23-1 / IV-MTR conventions):
+ *   001-099  Origin acceptance
+ *   100-299  In-transit / sortation between facilities
+ *   300-399  Destination delivery prep
+ *   400-499  Bundle sortation (Standard Mail) → in-transit
+ *   500-599  Logical / predicted events (USPS estimate, not a physical scan)
+ *   800-899  Origin sortation
+ *   900-919  Destination sortation / out-for-delivery
+ *   920-989  Delivered
+ *   990-999  Undeliverable (UAA)
+ */
 export function mapOperationCode(code: string | undefined | null): string {
   if (!code) return "OTHER";
-  const c = code.toString().padStart(2, "0");
-  // Abbreviated mapping — extend as we learn the feed's real codes.
-  // See USPS Mail.dat / IV-MTR operation code reference.
-  const map: Record<string, string> = {
+  const raw = code.toString().trim();
+
+  // Explicit 3-digit codes we've confirmed in production
+  const exact: Record<string, string> = {
+    "001": "ORIGIN_ACCEPTANCE",
+    "002": "ORIGIN_ACCEPTANCE",
+    "483": "IN_TRANSIT",            // Bundle sortation begin
+    "484": "IN_TRANSIT",            // Bundle sortation end
+    "517": "IN_TRANSIT",            // Logical / predicted delivery date
+    "891": "ORIGIN_PROCESSED",      // Origin sortation
+    "893": "ORIGIN_PROCESSED",      // Origin sortation (most common)
+    "918": "DESTINATION_PROCESSED", // Destination sortation
+    "919": "DESTINATION_DELIVERY",  // Destination delivery unit arrival
+    "920": "OUT_FOR_DELIVERY",
+    "921": "OUT_FOR_DELIVERY",
+    "942": "DELIVERED",
+    "994": "UNDELIVERABLE",
+    "995": "UNDELIVERABLE",
+    // Legacy 2-digit (kept for older data)
     "10": "ORIGIN_ACCEPTANCE",
-    "92": "ORIGIN_PROCESSED",
-    "80": "IN_TRANSIT",
-    "89": "IN_TRANSIT",
     "21": "DESTINATION_PROCESSED",
     "23": "DESTINATION_PROCESSED",
     "35": "DESTINATION_DELIVERY",
     "42": "OUT_FOR_DELIVERY",
     "51": "DELIVERED",
+    "80": "IN_TRANSIT",
     "81": "DELIVERED",
+    "89": "IN_TRANSIT",
+    "92": "ORIGIN_PROCESSED",
     "99": "UNDELIVERABLE",
   };
-  return map[c] ?? "OTHER";
+  if (exact[raw]) return exact[raw];
+
+  // Fall back to range-based bucketing for codes we haven't catalogued
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return "OTHER";
+  if (n >= 990 && n <= 999) return "UNDELIVERABLE";
+  if (n >= 920 && n <= 989) return "DELIVERED";
+  if (n >= 900 && n <= 919) return "DESTINATION_DELIVERY";
+  if (n >= 800 && n <= 899) return "ORIGIN_PROCESSED";
+  if (n >= 500 && n <= 599) return "IN_TRANSIT"; // logical events
+  if (n >= 400 && n <= 499) return "IN_TRANSIT";
+  if (n >= 300 && n <= 399) return "DESTINATION_PROCESSED";
+  if (n >= 100 && n <= 299) return "IN_TRANSIT";
+  if (n >= 1 && n <= 99) return "ORIGIN_ACCEPTANCE";
+  return "OTHER";
 }
