@@ -103,16 +103,26 @@ export default function OverviewPage() {
         <h1 className="font-display text-5xl font-medium tracking-tight text-ink leading-tight">
           {totalPieces === 0 ? (
             <>Welcome back.</>
-          ) : totalTracked === 0 ? (
+          ) : totalActive === 0 ? (
             <>
               <span className="italic text-brand-600">{totalPieces.toLocaleString()}</span>{" "}
-              pieces imported
-              <span className="text-stone"> · awaiting USPS scans.</span>
+              pieces archived
+              <span className="text-stone"> · all past USPS scan window.</span>
+            </>
+          ) : totalTracked === 0 ? (
+            <>
+              <span className="italic text-brand-600">{totalActive.toLocaleString()}</span>{" "}
+              active pieces awaiting USPS scans
+              <span className="text-stone">
+                {totalExpired > 0
+                  ? ` · ${totalExpired.toLocaleString()} archived.`
+                  : "."}
+              </span>
             </>
           ) : totalDelivered === 0 ? (
             <>
               <span className="italic text-brand-600">{totalTracked.toLocaleString()}</span>{" "}
-              of {totalPieces.toLocaleString()} pieces moving through USPS
+              of {totalActive.toLocaleString()} active pieces tracked by USPS
               <span className="text-stone"> · {totalInTransit.toLocaleString()} in transit.</span>
             </>
           ) : (
