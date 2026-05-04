@@ -27,7 +27,9 @@ import {
 const primaryNav: NavLink[] = [
   { label: "Dashboard", href: "/dashboard/overview", icon: LayoutDashboard },
   { label: "Orders", href: "/dashboard/orders", icon: Package },
-  { label: "Packages", href: "/dashboard/packages", icon: Layers },
+  // "Packages" removed from customer nav — prepaid balance is now surfaced
+  // inline at /orders/new during checkout (the moment when it's relevant).
+  // Admins still manage packages at /dashboard/admin/packages.
   { label: "Mail Tracking", href: "/dashboard/mail", icon: Mail },
   { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { label: "Billing", href: "/dashboard/billing", icon: CreditCard },

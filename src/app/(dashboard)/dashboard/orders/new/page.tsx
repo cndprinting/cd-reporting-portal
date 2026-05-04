@@ -128,6 +128,18 @@ export default function NewOrderPage() {
     details: Record<string, unknown>;
   } | null>(null);
 
+  // Prepaid package — if customer has an active balance, offer "draw from
+  // package" instead of charging card on file. Only shown when there's a
+  // package with enough remaining to cover the order.
+  const [activePackage, setActivePackage] = useState<{
+    id: string;
+    name: string;
+    totalPieces: number;
+    usedPieces: number;
+    pricePerPiece: number;
+  } | null>(null);
+  const [usePackage, setUsePackage] = useState(false);
+
   useEffect(() => {
     fetch("/api/templates").then((r) => r.json()).then((d) => setTemplates(d.templates ?? []));
     fetch("/api/campaigns")
@@ -146,6 +158,17 @@ export default function NewOrderPage() {
         setEnabledModules(mods);
       })
       .catch(() => setEnabledModules([]));
+    // Load active prepaid package (if any)
+    fetch("/api/packages")
+      .then((r) => r.json())
+      .then((d) => {
+        const active = (d.packages ?? []).find(
+          (p: { status: string; totalPieces: number; usedPieces: number }) =>
+            p.status === "ACTIVE" && p.totalPieces - p.usedPieces > 0,
+        );
+        if (active) setActivePackage(active);
+      })
+      .catch(() => {});
   }, []);
 
   const createCampaign = async () => {
@@ -289,10 +312,12 @@ export default function NewOrderPage() {
             dropDate,
             mailClass: "Marketing Mail",
             mailShape: (modulePricing.details as { format?: string }).format ?? "letter",
+            // When drawing from prepaid package, charge today is $0 — but we
+            // still record the rate-card pricePerPiece for accounting. The
+            // backend creates a PackageDrawdown when packageId is set.
             pricePerPiece: modulePricing.pricePerPiece,
-            totalPrice: modulePricing.totalPrice,
-            // Stash the rate-card selection details in customFields under
-            // the module that produced it (so admin can audit the picker)
+            totalPrice: usePackage && activePackage ? 0 : modulePricing.totalPrice,
+            packageId: usePackage && activePackage ? activePackage.id : undefined,
             customFields: {
               ...(Object.keys(moduleFields).length > 0 ? moduleFields : {}),
               _pricing: modulePricing.details,
@@ -306,8 +331,8 @@ export default function NewOrderPage() {
             mailClass: "Marketing Mail",
             mailShape: selectedTemplate!.category,
             pricePerPiece: selectedTemplate!.pricePerPiece,
-            totalPrice,
-            // Persona-module data: stored in Order.customFields keyed by module id
+            totalPrice: usePackage && activePackage ? 0 : totalPrice,
+            packageId: usePackage && activePackage ? activePackage.id : undefined,
             customFields:
               Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
           };
@@ -550,6 +575,76 @@ export default function NewOrderPage() {
             />
           );
         })}
+
+      {/* PREPAID PACKAGE BALANCE — only when customer has an active package
+          with enough remaining to cover the order. Lets them draw from
+          balance instead of charging the card on file. */}
+      {activePackage && rowCount > 0 && (() => {
+        const remaining = activePackage.totalPieces - activePackage.usedPieces;
+        const covers = remaining >= rowCount;
+        return (
+          <Card className="border-emerald-300 bg-gradient-to-br from-emerald-50 to-white">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl">💳</div>
+                    <div>
+                      <div className="text-sm font-semibold text-emerald-900">
+                        Prepaid balance available
+                      </div>
+                      <div className="text-xs text-emerald-700 mt-0.5">
+                        {activePackage.name} · {remaining.toLocaleString()} pieces remaining
+                        {!covers && (
+                          <span className="text-amber-700">
+                            {" "}— not enough to cover this {rowCount.toLocaleString()}-piece order
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {covers && (
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setUsePackage(true)}
+                        className={`text-left rounded border-2 p-3 transition-colors ${
+                          usePackage
+                            ? "border-emerald-500 bg-emerald-100"
+                            : "border-emerald-200 bg-white hover:border-emerald-400"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold text-emerald-900">
+                          Draw from balance
+                        </div>
+                        <div className="text-xs text-emerald-700 mt-0.5">
+                          Deduct {rowCount.toLocaleString()} pieces · charge today $0.00
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUsePackage(false)}
+                        className={`text-left rounded border-2 p-3 transition-colors ${
+                          !usePackage
+                            ? "border-stone bg-paper-soft"
+                            : "border-line bg-white hover:border-stone"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold text-ink">
+                          Charge card on file
+                        </div>
+                        <div className="text-xs text-stone mt-0.5">
+                          Save your prepaid pieces for later
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* STEP 2: PICK TEMPLATE — only when no module-supplied pricing is active */}
       {!enabledModules.some((m) => !!m.PricingCard) && (

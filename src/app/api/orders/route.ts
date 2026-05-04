@@ -120,12 +120,50 @@ export async function POST(req: NextRequest) {
       customDesignUrl: body.customDesignUrl ?? null,
       customDesignFileName: body.customDesignFileName ?? null,
       customDesignUploadedAt: body.customDesignUrl ? new Date() : null,
+      // Prepaid package draw-down — when set, charge today is $0; package
+      // balance is decremented + audit row written below.
+      packageId: body.packageId ?? null,
     },
     include: {
       company: { select: { name: true, users: { select: { email: true } } } },
       campaign: { select: { name: true, campaignCode: true } },
     },
   });
+
+  // Prepaid package draw-down — decrement balance + write audit row
+  if (body.packageId && quantity) {
+    try {
+      const pkg = await prisma.mailPackage.findUnique({
+        where: { id: body.packageId },
+      });
+      if (pkg && pkg.companyId === companyId && pkg.status === "ACTIVE") {
+        const remaining = pkg.totalPieces - pkg.usedPieces;
+        if (remaining >= quantity) {
+          await prisma.$transaction([
+            prisma.mailPackage.update({
+              where: { id: pkg.id },
+              data: {
+                usedPieces: { increment: quantity },
+                // Auto-flip to EXHAUSTED when balance hits zero
+                status:
+                  pkg.usedPieces + quantity >= pkg.totalPieces ? "EXHAUSTED" : "ACTIVE",
+              },
+            }),
+            prisma.packageDrawdown.create({
+              data: {
+                packageId: pkg.id,
+                orderId: order.id,
+                pieces: quantity,
+                note: `Order ${order.orderCode}`,
+              },
+            }),
+          ]);
+        }
+      }
+    } catch (e) {
+      console.error("[orders] package drawdown failed", e);
+    }
+  }
 
   // Notify admins on quote requests (Resend, branded)
   if (isCustomQuote) {
