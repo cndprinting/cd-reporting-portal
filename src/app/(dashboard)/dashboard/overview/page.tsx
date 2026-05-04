@@ -27,6 +27,9 @@ interface Mailer {
   name: string;
   pieceCount: number;
   deliveredCount: number;
+  inTransitCount: number;
+  pendingCount: number;
+  trackedCount: number;
   deliveryRate: number;
 }
 
@@ -59,8 +62,12 @@ export default function OverviewPage() {
 
   const totalPieces = mailers.reduce((s, m) => s + m.pieceCount, 0);
   const totalDelivered = mailers.reduce((s, m) => s + m.deliveredCount, 0);
-  const overallRate = totalPieces ? totalDelivered / totalPieces : 0;
-  const inTransit = totalPieces - totalDelivered;
+  const totalInTransit = mailers.reduce((s, m) => s + (m.inTransitCount ?? 0), 0);
+  const totalPending = mailers.reduce((s, m) => s + (m.pendingCount ?? 0), 0);
+  const totalTracked = mailers.reduce((s, m) => s + (m.trackedCount ?? 0), 0);
+  // Delivery rate is computed against pieces USPS has actually started
+  // tracking, not against PENDING pieces (older mail past the scan window).
+  const overallRate = totalTracked ? totalDelivered / totalTracked : 0;
 
   return (
     <div className="space-y-8">
@@ -90,53 +97,81 @@ export default function OverviewPage() {
           </div>
         </div>
         <h1 className="font-display text-5xl font-medium tracking-tight text-ink leading-tight">
-          {totalPieces > 0 ? (
+          {totalPieces === 0 ? (
+            <>Welcome back.</>
+          ) : totalTracked === 0 ? (
             <>
-              <span className="italic text-brand-600">{totalDelivered.toLocaleString()}</span>{" "}
-              of {totalPieces.toLocaleString()} pieces delivered
-              <span className="text-stone"> · {((overallRate || 0) * 100).toFixed(0)}% rate.</span>
+              <span className="italic text-brand-600">{totalPieces.toLocaleString()}</span>{" "}
+              pieces imported
+              <span className="text-stone"> · awaiting USPS scans.</span>
+            </>
+          ) : totalDelivered === 0 ? (
+            <>
+              <span className="italic text-brand-600">{totalTracked.toLocaleString()}</span>{" "}
+              of {totalPieces.toLocaleString()} pieces moving through USPS
+              <span className="text-stone"> · {totalInTransit.toLocaleString()} in transit.</span>
             </>
           ) : (
-            <>Welcome back.</>
+            <>
+              <span className="italic text-brand-600">{totalDelivered.toLocaleString()}</span>{" "}
+              of {totalTracked.toLocaleString()} tracked pieces delivered
+              <span className="text-stone"> · {((overallRate || 0) * 100).toFixed(0)}% rate.</span>
+            </>
           )}
         </h1>
         <p className="text-sm text-stone mt-3 max-w-2xl">
-          {mailers.length > 0
-            ? `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"} across all active campaigns. ${inTransit.toLocaleString()} pieces in transit.`
-            : "No active mail to track yet. When customer orders flow in, they'll show up here automatically."}
+          {mailers.length === 0
+            ? "No active mail to track yet. When customer orders flow in, they'll show up here automatically."
+            : totalPending > 0 && totalTracked > 0
+              ? `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"}. ${totalPending.toLocaleString()} pieces still pending USPS pickup (older mailings or just-imported lists).`
+              : `Tracking ${mailers.length} customer${mailers.length === 1 ? "" : "s"} across all active campaigns.`}
         </p>
       </div>
 
       {/* Real KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          label="Total Pieces Tracked"
+          label="Pieces Imported"
           value={totalPieces}
           icon={Mail}
           iconColor="text-blue-600 bg-blue-100"
-          helpText="Mailpieces imported into the portal across all customers"
+          helpText="Mailpieces in the portal across all customers"
+        />
+        <KPICard
+          label="Tracked by USPS"
+          value={totalTracked}
+          icon={Truck}
+          iconColor={totalTracked > 0 ? "text-amber-600 bg-amber-100" : "text-stone bg-paper-soft"}
+          helpText={
+            totalPieces > 0
+              ? `${((totalTracked / totalPieces) * 100).toFixed(1)}% have at least one USPS scan`
+              : "No pieces yet"
+          }
         />
         <KPICard
           label="Delivered"
           value={totalDelivered}
           icon={CheckCircle2}
-          iconColor="text-emerald-600 bg-emerald-100"
-          helpText="USPS has scanned as delivered or inferred delivered"
-        />
-        <KPICard
-          label="In Transit"
-          value={inTransit}
-          icon={Truck}
-          iconColor="text-amber-600 bg-amber-100"
-          helpText="Accepted by USPS, not yet delivered"
+          iconColor={totalDelivered > 0 ? "text-emerald-600 bg-emerald-100" : "text-stone bg-paper-soft"}
+          helpText={
+            totalDelivered > 0
+              ? "Final delivery scan or inferred delivered"
+              : totalInTransit > 0
+                ? `${totalInTransit.toLocaleString()} still in transit — no deliveries yet`
+                : "No deliveries yet"
+          }
         />
         <KPICard
           label="Delivery Rate"
           value={Number((overallRate * 100).toFixed(1))}
           icon={CheckCircle2}
-          iconColor="text-violet-600 bg-violet-100"
+          iconColor={totalDelivered > 0 ? "text-violet-600 bg-violet-100" : "text-stone bg-paper-soft"}
           format="percent"
-          helpText="Delivered / total pieces"
+          helpText={
+            totalTracked > 0
+              ? "Delivered ÷ pieces tracked by USPS"
+              : "Awaiting USPS scans"
+          }
         />
       </div>
 

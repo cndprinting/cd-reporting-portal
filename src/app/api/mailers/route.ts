@@ -49,6 +49,23 @@ export async function GET() {
     const delivered = statusFor
       .filter((r) => r.status === "DELIVERED" || r.status === "DELIVERED_INFERRED")
       .reduce((s, r) => s + r._count, 0);
+    // "In transit" = has at least one scan AND not yet delivered (excludes
+    // PENDING — pieces that USPS never scanned, usually older mailings past
+    // the scan window).
+    const inTransit = statusFor
+      .filter((r) =>
+        ["ACCEPTED", "IN_TRANSIT", "OUT_FOR_DELIVERY"].includes(r.status),
+      )
+      .reduce((s, r) => s + r._count, 0);
+    // "Pending" = imported but no USPS scan yet
+    const pending = statusFor
+      .filter((r) => r.status === "PENDING")
+      .reduce((s, r) => s + r._count, 0);
+    const undeliverable = statusFor
+      .filter((r) => r.status === "UNDELIVERABLE")
+      .reduce((s, r) => s + r._count, 0);
+    // Pieces that have hit the USPS network (excludes PENDING)
+    const trackedCount = pieces - pending;
     const mids = midRows.filter((r) => r.companyId === c.id).map((r) => r.imbMailerId).filter(Boolean);
 
     return {
@@ -59,7 +76,13 @@ export async function GET() {
       campaignCount: c._count.campaigns,
       pieceCount: pieces,
       deliveredCount: delivered,
-      deliveryRate: pieces ? delivered / pieces : 0,
+      inTransitCount: inTransit,
+      pendingCount: pending,
+      undeliverableCount: undeliverable,
+      trackedCount, // pieces with at least one scan
+      // Delivery rate is more honest when computed against pieces actually
+      // tracked by USPS (not pending pieces that may never get scanned)
+      deliveryRate: trackedCount ? delivered / trackedCount : 0,
       mailerIds: [...new Set(mids)],
     };
   });
