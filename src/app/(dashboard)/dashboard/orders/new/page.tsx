@@ -215,14 +215,25 @@ export default function NewOrderPage() {
   // Customers with a module-supplied PricingCard skip template selection entirely
   const usingModulePricing = enabledModules.some((m) => !!m.PricingCard);
 
+  // canSubmit logic by path:
+  //  - Custom Quote: campaign + a description ≥10 chars
+  //  - Custom Design + module rate card (Aaron's primary path): list + design
+  //    PDF + rate-card pricing all set
+  //  - Custom Design (no module): list + design PDF (routes to quote)
+  //  - Module rate card alone: not enough — module customer still needs to
+  //    pick artwork (Custom Design or Custom Quote)
+  //  - Standard: list + selected template
   const canSubmit = useCustomQuote
     ? !!campaignId && customQuoteRequest.trim().length >= 10
-    : useCustomDesign
-      ? !!sheet && !!fileUrl && quality >= 0.6 && !!customDesignUrl && !!campaignId
-      : usingModulePricing
-        ? !!sheet && !!fileUrl && quality >= 0.6 && !!campaignId &&
-          !!modulePricing && !modulePricing.details?.belowMinimum
-        : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
+    : useCustomDesign && usingModulePricing
+      ? !!sheet && !!fileUrl && quality >= 0.6 && !!campaignId &&
+        !!customDesignUrl && !!modulePricing &&
+        !modulePricing.details?.belowMinimum
+      : useCustomDesign
+        ? !!sheet && !!fileUrl && quality >= 0.6 && !!customDesignUrl && !!campaignId
+        : usingModulePricing
+          ? false // module customer must pick Custom Design or Custom Quote
+          : !!sheet && !!fileUrl && quality >= 0.6 && !!selectedTemplate && !!campaignId;
 
   const handleCustomDesignFile = async (file: File) => {
     setCustomDesignErr(null);
@@ -287,20 +298,40 @@ export default function NewOrderPage() {
             customQuoteTargetDate: dropDate,
             status: "QUOTE_REQUESTED",
           }
+        : useCustomDesign && usingModulePricing && modulePricing
+        ? {
+            // Aaron's primary path: rate card pricing + his own design PDF.
+            // Skip quote-review since size/price are pre-determined by the
+            // rate card. Status = DRAFT so admin can still proof-check.
+            campaignId,
+            description: `${(modulePricing.details as { format?: string }).format ?? ""} ${(modulePricing.details as { size?: string }).size ?? ""} — ${customDesignFileName}`.trim(),
+            quantity: rowCount,
+            dropDate,
+            mailClass: "Marketing Mail",
+            mailShape: (modulePricing.details as { format?: string }).format ?? "letter",
+            pricePerPiece: modulePricing.pricePerPiece,
+            totalPrice: usePackage && activePackage ? 0 : modulePricing.totalPrice,
+            packageId: usePackage && activePackage ? activePackage.id : undefined,
+            customDesignUrl,
+            customDesignFileName,
+            customFields: {
+              ...(Object.keys(moduleFields).length > 0 ? moduleFields : {}),
+              _pricing: modulePricing.details,
+            },
+          }
         : useCustomDesign
         ? {
             campaignId,
             description: `Custom design — ${customDesignFileName}`,
             quantity: rowCount,
             dropDate,
-            // Custom designs need a rep to confirm specs + price before going live
+            // Custom designs without rate-card pricing need rep review
             isCustomQuote: true,
             customQuoteRequest: `Customer-supplied design: ${customDesignFileName}. Please review size/stock and apply pricing.`,
             customQuoteUrgency: "standard",
             customDesignUrl,
             customDesignFileName,
             status: "QUOTE_REQUESTED",
-            // Persona-module data passes through here too
             customFields:
               Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
           }
@@ -646,8 +677,12 @@ export default function NewOrderPage() {
         );
       })()}
 
-      {/* STEP 2: PICK TEMPLATE — only when no module-supplied pricing is active */}
-      {!enabledModules.some((m) => !!m.PricingCard) && (
+      {/* STEP 2: ARTWORK & PRICING PATH
+          - For customers WITH a module rate card (e.g. Land/RE): rate card
+            handles pricing above, this card surfaces artwork choice only —
+            Custom Design (drop your own PDF) or Custom Quote (specialty job).
+            Stock templates hidden since the rate card covers all standard sizes.
+          - For everyone else: stock templates + Custom Design + Custom Quote. */}
       <Card className={!sheet && !useCustomQuote ? "opacity-60 pointer-events-none" : ""}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -658,7 +693,9 @@ export default function NewOrderPage() {
             >
               2
             </span>
-            Pick a template — or request a custom quote
+            {usingModulePricing
+              ? "Choose your artwork — drop your own design or request a custom job"
+              : "Pick a template — or request a custom quote"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -737,7 +774,11 @@ export default function NewOrderPage() {
               </div>
             </button>
 
-            {templates.map((t) => {
+            {/* Stock templates hidden when a module rate card is supplying
+                pricing — the rate card already covers all standard sizes.
+                Custom Design + Custom Quote tiles remain so customer can
+                still bring their own artwork or request specialty work. */}
+            {!usingModulePricing && templates.map((t) => {
               const previewData =
                 sheet && sheet.rows[0]
                   ? {
@@ -906,7 +947,6 @@ export default function NewOrderPage() {
           )}
         </CardContent>
       </Card>
-      )}
 
       {/* STEP 3: PRICE + DROP DATE + SUBMIT */}
       <Card
