@@ -41,6 +41,7 @@ const adminNav: NavLink[] = [
   { label: "Orders", href: "/dashboard/admin/orders" },
   { label: "Packages", href: "/dashboard/admin/packages" },
   { label: "Customers", href: "/dashboard/admin/companies" },
+  { label: "Bulk Invite", href: "/dashboard/admin/bulk-invite" },
   { label: "Campaigns", href: "/dashboard/admin/campaigns" },
   { label: "Templates", href: "/dashboard/admin/templates" },
   { label: "Users", href: "/dashboard/admin/users" },
