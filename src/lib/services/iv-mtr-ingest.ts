@@ -81,21 +81,42 @@ export function normalizeRecord(raw: Record<string, unknown>): IVScanRecord | nu
     return undefined;
   };
 
+  // USPS's actual push format (verified from real payload 2026-05-04):
+  //   imbTrackingCode = "00271901052658190625" (20 digits = BC+STID+MID+Serial)
+  //   routingCodeImbMatchingPortion = "33573680167" (11-digit routing)
+  // Together these form the full 31-digit IMb.
+  // Some other tenants/contracts use a different field name — try them all.
   const imbRaw = pick(
-    "imb",
-    "IMb",
-    "IMB",
+    "imbTrackingCode",      // ← USPS's actual current field name
     "intelligentMailBarcode",
     "intelligentMailBarCode",
     "imbBarcode",
+    "imb",
+    "IMb",
+    "IMB",
     "barcode",
     "barCode",
     "impb",
-    "imbSerial",
-    "ImbSerialNumber",
   );
-  if (!imbRaw) return null;
-  const imb = imbRaw.replace(/\D/g, "");
+  const routing = pick(
+    "routingCodeImbMatchingPortion", // ← USPS's actual current field name
+    "routingCode",
+    "imbRoutingCode",
+    "routingZip",
+  );
+  let imb: string;
+  if (imbRaw) {
+    imb = imbRaw.replace(/\D/g, "");
+    if (routing) imb += routing.replace(/\D/g, "");
+  } else {
+    // Fallback: reconstruct from MID + serial parts if no full IMb field
+    const mid = pick("imbMid", "mailerId", "mid");
+    const serial = pick("imbSerialNumber", "imbSerial", "serial", "serialNumber");
+    if (!mid || !serial) return null;
+    // We don't have BC/STID, so build a partial — won't match a stored 31-digit
+    // piece but at least gets logged as UnknownImb with diagnostic info.
+    imb = (mid + serial).replace(/\D/g, "");
+  }
   if (imb.length < 20 || imb.length > 31) return null;
 
   const scanDateTime = pick(
@@ -114,8 +135,9 @@ export function normalizeRecord(raw: Record<string, unknown>): IVScanRecord | nu
   return {
     imb,
     scanDateTime,
-    operationCode: pick("operationCode", "opCode", "scanCode", "eventCode", "stcOpCode"),
+    operationCode: pick("scanEventCode", "operationCode", "opCode", "scanCode", "eventCode", "stcOpCode"),
     operationDesc: pick(
+      "handlingEventTypeDescription", // ← USPS's actual current field
       "operationDesc",
       "operationDescription",
       "scanDesc",
