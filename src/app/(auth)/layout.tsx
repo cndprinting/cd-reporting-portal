@@ -2,13 +2,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900 px-4 py-12">
       <div className="mb-8 text-center">
-        <div className="inline-flex items-center gap-3 mb-2">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-white p-2">
-            <img src="/logo-icon.svg" alt="C&D" className="h-full w-full" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">MailerCity</h1>
+        <div className="inline-flex items-center justify-center bg-white rounded-2xl px-6 py-4 mb-3 shadow-lg">
+          <img
+            src="/logo-mailercity.png"
+            alt="C&D MailerCity — We run your mail marketing"
+            className="h-14 w-auto"
+          />
         </div>
-        <p className="text-brand-200 text-sm">by C&amp;D Printing · Campaign Performance Dashboard</p>
+        <p className="text-brand-200 text-sm">Campaign Performance Dashboard</p>
       </div>
       {children}
       <p className="mt-8 text-xs text-brand-300">
