@@ -13,6 +13,7 @@ import {
   Truck,
   CheckCircle2,
   AlertTriangle,
+  Zap,
   ArrowRight,
   Clock,
   RefreshCw,
@@ -254,9 +255,26 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
 
-      {/* Jump-offs — Cross-Channel Attribution removed (no QR/call tracking
-          live yet, was showing demo data). Will return when channels wire up. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Jump-offs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/dashboard/attribution">
+          <Card className="hover:shadow-md transition-shadow h-full">
+            <CardContent className="p-5 flex items-start gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-violet-100 text-violet-600 shrink-0">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">
+                  Cross-Channel Attribution
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Mail + QR + calls on one timeline per campaign
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/dashboard/mail-tracking">
           <Card className="hover:shadow-md transition-shadow h-full">
             <CardContent className="p-5 flex items-start gap-3">
