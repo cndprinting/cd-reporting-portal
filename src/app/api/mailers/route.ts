@@ -2,20 +2,23 @@
  * Admin-only list of mailer customers with tracking rollups.
  * GET /api/mailers
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getDemoMailersList } from "@/lib/demo-data";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session || (session.role !== "ADMIN" && session.role !== "ACCOUNT_MANAGER")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   if (!prisma) return NextResponse.json(getDemoMailersList());
+
+  const url = new URL(req.url);
+  const includeExpired = url.searchParams.get("includeExpired") === "true";
 
   const companies = await prisma.company.findMany({
     where: { isActive: true },
@@ -92,5 +95,12 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({ mailers });
+  // Default: hide companies whose entire history is expired (no active pieces,
+  // never going to scan). They show up via ?includeExpired=true for admin
+  // historical/audit views (e.g. /dashboard/admin/companies).
+  const visible = includeExpired
+    ? mailers
+    : mailers.filter((m) => m.pieceCount - (m.expiredCount ?? 0) > 0);
+
+  return NextResponse.json({ mailers: visible });
 }

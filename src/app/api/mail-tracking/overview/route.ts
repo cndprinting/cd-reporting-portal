@@ -103,6 +103,10 @@ export async function GET(req: NextRequest) {
     lastScanAt: string | null;
   }> = [];
   if (!companyId && session.role !== "CUSTOMER") {
+    // Only include customers with at least one ACTIVE piece (non-expired).
+    // Customers whose entire history is EXPIRED_NO_SCAN (drops > 30d ago,
+    // past USPS scan window) belong in the historical view, not the live
+    // operational rollup — they'll never produce new scans.
     const rows = await prisma.$queryRaw<
       Array<{
         id: string;
@@ -117,7 +121,7 @@ export async function GET(req: NextRequest) {
       SELECT
         c.id,
         c.name,
-        COUNT(DISTINCT mp.id)::bigint AS "pieceCount",
+        COUNT(DISTINCT mp.id) FILTER (WHERE mp.status != 'EXPIRED_NO_SCAN')::bigint AS "pieceCount",
         COUNT(se.id)::bigint AS "scanCount",
         COUNT(DISTINCT mp.id) FILTER (WHERE mp."firstScanAt" IS NOT NULL)::bigint AS "acceptedCount",
         COUNT(DISTINCT mp.id) FILTER (WHERE mp.status IN ('DELIVERED','DELIVERED_INFERRED'))::bigint AS "deliveredCount",
@@ -127,7 +131,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN "ScanEvent" se ON se."mailPieceId" = mp.id
       WHERE c."isActive" = true
       GROUP BY c.id, c.name
-      HAVING COUNT(DISTINCT mp.id) > 0
+      HAVING COUNT(DISTINCT mp.id) FILTER (WHERE mp.status != 'EXPIRED_NO_SCAN') > 0
       ORDER BY "scanCount" DESC, c.name ASC
     `;
     for (const r of rows) {
