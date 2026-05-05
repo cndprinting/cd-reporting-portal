@@ -30,6 +30,10 @@ import {
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
+interface AttributionEmpty {
+  empty: true;
+}
+
 interface AttributionData {
   campaign: {
     id: string;
@@ -67,28 +71,81 @@ interface AttributionData {
 const COLORS = { mail: "#10b981", qr: "#0ea5e9", call: "#f59e0b", conv: "#8b5cf6" };
 
 export default function AttributionPage() {
-  const [data, setData] = useState<AttributionData | null>(null);
-  const [campaignId, setCampaignId] = useState("camp-1");
+  const [data, setData] = useState<AttributionData | AttributionEmpty | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [campaignId, setCampaignId] = useState("");
   const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string; campaignCode: string }>>([]);
 
   useEffect(() => {
     fetch("/api/campaigns")
       .then((r) => r.json())
-      .then((d) => setCampaigns(d.campaigns ?? d ?? []))
+      .then((d) => {
+        const list = d.campaigns ?? d ?? [];
+        setCampaigns(list);
+        if (list.length > 0 && !campaignId) setCampaignId(list[0].id);
+      })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    fetch(`/api/attribution/${campaignId}`).then((r) => r.json()).then(setData);
+    if (!campaignId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/attribution/${campaignId}`)
+      .then((r) => r.json())
+      .then(setData)
+      .finally(() => setLoading(false));
   }, [campaignId]);
 
-  if (!data) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-96 text-gray-500">
+      <div className="flex items-center justify-center h-96 text-stone">
         Loading cross-channel attribution…
       </div>
     );
   }
+
+  // Honest empty state — no real attribution data yet (no QR/call tracking
+  // wired in, OR no campaigns with delivery + response data). Don't fabricate.
+  if (!data || (data as AttributionEmpty).empty || campaigns.length === 0) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-violet-100 text-violet-600">
+            <Zap className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-ink">Cross-Channel Attribution</h1>
+            <p className="text-sm text-stone">
+              How direct mail, QR scans, and phone calls work together per campaign
+            </p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="text-4xl mb-3">🎯</div>
+            <div className="text-lg font-semibold text-ink mb-2">
+              No attribution data yet
+            </div>
+            <div className="text-sm text-stone max-w-md mx-auto leading-relaxed">
+              This view shows how mail deliveries, QR code scans, and phone
+              calls correlate after a drop. It populates once you&rsquo;ve got
+              a campaign with at least one of: USPS scan data, QR code tracking,
+              or a call-tracking integration.
+            </div>
+            <div className="text-xs text-stone mt-4">
+              Talk to your C&amp;D rep about wiring up a tracking number or QR
+              destination URL on your next mailer.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  const realData = data as AttributionData;
 
   return (
     <div className="space-y-6">
@@ -110,13 +167,11 @@ export default function AttributionPage() {
           value={campaignId}
           onChange={(e) => setCampaignId(e.target.value)}
         >
-          {(campaigns.length ? campaigns : [{ id: "camp-1", name: "Spring Homeowner Mailer", campaignCode: "CD-2026-001" }]).map(
-            (c) => (
-              <option key={c.id} value={c.id}>
-                {c.campaignCode} — {c.name}
-              </option>
-            ),
-          )}
+          {campaigns.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.campaignCode} — {c.name}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -124,17 +179,17 @@ export default function AttributionPage() {
       <Card className="bg-gradient-to-r from-violet-50 to-blue-50 border-violet-200">
         <CardContent className="py-4 flex items-center justify-between text-sm">
           <div>
-            <div className="font-semibold text-gray-900">{data.campaign.name}</div>
+            <div className="font-semibold text-gray-900">{realData.campaign.name}</div>
             <div className="text-gray-600">
-              {data.campaign.company.name} &middot; Dropped{" "}
+              {realData.campaign.company.name} &middot; Dropped{" "}
               <span className="font-medium">
-                {new Date(data.campaign.dropDate).toLocaleDateString()}
+                {new Date(realData.campaign.dropDate).toLocaleDateString()}
               </span>
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-violet-700">
-              {(data.responseRate * 100).toFixed(1)}%
+              {(realData.responseRate * 100).toFixed(1)}%
             </div>
             <div className="text-xs text-gray-500">Response rate across all channels</div>
           </div>
@@ -145,27 +200,27 @@ export default function AttributionPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Pieces Delivered"
-          value={data.totalDelivered}
+          value={realData.totalDelivered}
           icon={Mail}
           iconColor="text-emerald-600 bg-emerald-100"
         />
         <KPICard
           label="QR Scans"
-          value={data.totalQRScans}
+          value={realData.totalQRScans}
           icon={QrCode}
           iconColor="text-sky-600 bg-sky-100"
           helpText="Household scanned QR code on mailer"
         />
         <KPICard
           label="Phone Calls"
-          value={data.totalCalls}
+          value={realData.totalCalls}
           icon={Phone}
           iconColor="text-amber-600 bg-amber-100"
           helpText="Tracked calls from campaign number"
         />
         <KPICard
           label="Avg Response Delay"
-          value={data.avgResponseDelayDays ?? 0}
+          value={realData.avgResponseDelayDays ?? 0}
           icon={Clock}
           iconColor="text-violet-600 bg-violet-100"
           helpText="Days from first delivery scan to first response"
@@ -185,7 +240,7 @@ export default function AttributionPage() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={360}>
-            <AreaChart data={data.daysSinceDrop}>
+            <AreaChart data={realData.daysSinceDrop}>
               <defs>
                 <linearGradient id="gMail" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={COLORS.mail} stopOpacity={0.5} />
@@ -228,7 +283,7 @@ export default function AttributionPage() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={data.daysSinceDrop}>
+              <LineChart data={realData.daysSinceDrop}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                 <YAxis
@@ -259,7 +314,7 @@ export default function AttributionPage() {
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={data.channelMix}
+                  data={realData.channelMix}
                   dataKey="count"
                   nameKey="channel"
                   cx="50%"
@@ -272,7 +327,7 @@ export default function AttributionPage() {
                   }
                   labelLine={false}
                 >
-                  {data.channelMix.map((c, i) => (
+                  {realData.channelMix.map((c, i) => (
                     <Cell key={c.channel} fill={i === 0 ? COLORS.qr : COLORS.call} />
                   ))}
                 </Pie>
@@ -293,7 +348,7 @@ export default function AttributionPage() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data.topZips} layout="vertical" margin={{ left: 30 }}>
+            <BarChart data={realData.topZips} layout="vertical" margin={{ left: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="zip" tick={{ fontSize: 11 }} width={80} />
@@ -314,20 +369,20 @@ export default function AttributionPage() {
             <div className="text-sm text-gray-800 space-y-2">
               <div className="font-semibold text-gray-900 text-base">The campaign story</div>
               <p>
-                <strong>{data.totalDelivered.toLocaleString()}</strong> pieces were delivered
-                over the {data.daysSinceDrop.length}-day window.
-                {data.avgResponseDelayDays != null && (
+                <strong>{realData.totalDelivered.toLocaleString()}</strong> pieces were delivered
+                over the {realData.daysSinceDrop.length}-day window.
+                {realData.avgResponseDelayDays != null && (
                   <>
                     {" "}The first household response landed{" "}
-                    <strong>{data.avgResponseDelayDays} days</strong> after the first delivery scan.
+                    <strong>{realData.avgResponseDelayDays} days</strong> after the first delivery scan.
                   </>
                 )}
               </p>
               <p>
-                <strong>{data.totalQRScans.toLocaleString()} QR scans</strong> and{" "}
-                <strong>{data.totalCalls.toLocaleString()} phone calls</strong> were attributed to
+                <strong>{realData.totalQRScans.toLocaleString()} QR scans</strong> and{" "}
+                <strong>{realData.totalCalls.toLocaleString()} phone calls</strong> were attributed to
                 this campaign, producing a blended response rate of{" "}
-                <strong>{(data.responseRate * 100).toFixed(2)}%</strong> — which is the real
+                <strong>{(realData.responseRate * 100).toFixed(2)}%</strong> — which is the real
                 number your customer cares about.
               </p>
               <p className="text-xs text-gray-600 italic">

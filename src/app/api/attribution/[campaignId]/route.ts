@@ -29,7 +29,7 @@ export async function GET(
 ) {
   const { campaignId } = await params;
 
-  if (!prisma) return NextResponse.json(demoAttribution(campaignId));
+  if (!prisma) return NextResponse.json({ empty: true });
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -38,8 +38,8 @@ export async function GET(
       mailBatches: { orderBy: { dropDate: "asc" }, take: 1 },
     },
   });
-  // Fall back to demo data when the campaign isn't in the DB yet (e.g., demo IDs like "camp-1")
-  if (!campaign) return NextResponse.json(demoAttribution(campaignId));
+  // No demo fallback — show an honest empty state on the page instead.
+  if (!campaign) return NextResponse.json({ empty: true });
 
   const dropDate =
     campaign.mailBatches[0]?.dropDate ?? campaign.startDate ?? campaign.setupDate;
