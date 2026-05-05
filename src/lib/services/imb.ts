@@ -156,8 +156,8 @@ export function mapOperationCode(code: string | undefined | null): string {
     "517": "IN_TRANSIT",            // Logical / predicted delivery date
     "891": "ORIGIN_PROCESSED",      // Origin sortation
     "893": "ORIGIN_PROCESSED",      // Origin sortation (most common)
-    "918": "DESTINATION_PROCESSED", // Destination sortation
-    "919": "DESTINATION_DELIVERY",  // Destination delivery unit arrival
+    "918": "DESTINATION_DELIVERY", // At destination delivery unit
+    "919": "DELIVERED",            // Stop-the-Clock — final delivery for letters
     "920": "OUT_FOR_DELIVERY",
     "921": "OUT_FOR_DELIVERY",
     "942": "DELIVERED",
