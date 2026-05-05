@@ -522,7 +522,16 @@ export async function importMailFile(params: {
     expectedInHomeDate?: string;
     isSeed?: boolean;
   }>;
-}): Promise<{ inserted: number; skipped: number }> {
+  /** Optional: enforce a specific MID. If provided, rows whose IMb's MID
+   *  doesn't match are rejected with reason="midMismatch". Defaults to
+   *  USPS_MID env config (C&D's registered 9-digit MID). */
+  expectedMid?: string;
+}): Promise<{
+  inserted: number;
+  skipped: number;
+  validationFailures: number;
+  validationSamples: Array<{ row: number; imb: string; reason: string }>;
+}> {
   if (!prisma) throw new Error("Database not initialized");
 
   // Look up the campaign's company once so we can denormalize companyId onto each MailPiece
@@ -546,22 +555,83 @@ export async function importMailFile(params: {
     }
   }
 
+  // Pre-flight validation: enforce structurally-valid IMbs (DMM 708) and
+  // optionally require a specific MID. Bad rows are rejected with a reason
+  // surfaced in the SharepointImport audit log so admins see exactly what
+  // went wrong instead of silently storing corrupt IMbs.
+  const expectedMid = params.expectedMid ?? USPS_MID;
+
   let inserted = 0;
   let skipped = 0;
+  let validationFailures = 0;
+  const validationSamples: Array<{ row: number; imb: string; reason: string }> = [];
 
-  for (const row of params.rows) {
-    const parsed = parseIMb(row.imb);
-    if (!parsed) {
+  const recordFailure = (rowIdx: number, imb: string, reason: string) => {
+    validationFailures++;
+    if (validationSamples.length < 10) {
+      validationSamples.push({ row: rowIdx + 1, imb, reason });
+    }
+  };
+
+  for (let i = 0; i < params.rows.length; i++) {
+    const row = params.rows[i];
+    const rawDigits = (row.imb ?? "").replace(/\D/g, "");
+
+    if (!rawDigits) {
+      recordFailure(i, row.imb ?? "", "empty IMb");
       skipped++;
       continue;
     }
+
+    const parsed = parseIMb(rawDigits);
+    if (!parsed) {
+      recordFailure(
+        i,
+        rawDigits,
+        `invalid IMb length ${rawDigits.length} (must be 20/25/29/31)`,
+      );
+      skipped++;
+      continue;
+    }
+
+    // Strict structural check: BC digits must each be 0-4 (DMM 708 §708.4.3.4).
+    // Catches off-by-one slice bugs that produce structurally-shaped strings
+    // with bogus BC values like '83', '91' that violate USPS rules.
+    if (!/^[0-4][0-4]$/.test(parsed.barcodeId)) {
+      recordFailure(
+        i,
+        rawDigits,
+        `invalid Barcode ID '${parsed.barcodeId}' — each digit must be 0-4`,
+      );
+      skipped++;
+      continue;
+    }
+
+    // STID can't be all zeros
+    if (parsed.serviceType === "000") {
+      recordFailure(i, rawDigits, "Service Type ID is '000' (invalid)");
+      skipped++;
+      continue;
+    }
+
+    // MID guard: if expectedMid is configured, every row's MID must match
+    if (expectedMid && parsed.mailerId !== expectedMid) {
+      recordFailure(
+        i,
+        rawDigits,
+        `MID '${parsed.mailerId}' doesn't match expected '${expectedMid}'`,
+      );
+      skipped++;
+      continue;
+    }
+
     try {
       await prisma.mailPiece.create({
         data: {
           campaignId: params.campaignId,
           companyId: campaign.companyId,
           mailBatchId: params.mailBatchId,
-          imb: row.imb.replace(/\D/g, ""),
+          imb: rawDigits,
           imbBarcodeId: parsed.barcodeId,
           imbServiceType: parsed.serviceType,
           imbMailerId: parsed.mailerId,
@@ -586,7 +656,6 @@ export async function importMailFile(params: {
   }
 
   // Auto-resolve any UnknownImb rows whose IMbs we just imported.
-  // Next time a scan for them arrives, it'll match the new MailPiece.
   const importedImbs = params.rows.map((r) => r.imb.replace(/\D/g, ""));
   if (importedImbs.length > 0) {
     await prisma.unknownImb
@@ -597,5 +666,5 @@ export async function importMailFile(params: {
       .catch(() => {});
   }
 
-  return { inserted, skipped };
+  return { inserted, skipped, validationFailures, validationSamples };
 }

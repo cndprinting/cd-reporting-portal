@@ -288,6 +288,21 @@ async function processFile(
     // Move the SharePoint file into _processed
     await moveItem(c.driveId, file.id, c.systemFolderIds.processed);
 
+    // Surface pre-flight validation failures in the audit log so admins
+    // see exactly what was wrong with the file (bad MID, off-by-one IMbs,
+    // etc.). If everything failed, mark the import FAILED.
+    const validationMsg =
+      result.validationFailures > 0
+        ? `${result.validationFailures} row(s) failed pre-flight validation. ` +
+          `Samples: ` +
+          result.validationSamples
+            .map((s) => `row ${s.row} (${s.imb.slice(0, 12)}…): ${s.reason}`)
+            .join(" | ")
+        : null;
+
+    const finalStatus =
+      result.inserted === 0 && result.validationFailures > 0 ? "FAILED" : "COMPLETED";
+
     await prisma.sharepointImport.update({
       where: { id: importLog.id },
       data: {
@@ -296,7 +311,8 @@ async function processFile(
         createdCampaignId: campaignId,
         imbsImported: result.inserted,
         imbsSkipped: result.skipped,
-        status: "COMPLETED",
+        status: finalStatus,
+        errorMessage: validationMsg,
         completedAt: new Date(),
       },
     });
