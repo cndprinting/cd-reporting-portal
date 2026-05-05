@@ -19,6 +19,10 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const reqCompanyId = url.searchParams.get("companyId");
+  // Operational view excludes EXPIRED_NO_SCAN by default (these never produce
+  // scans — drops > 30d ago, past USPS retention). Pass ?includeExpired=true
+  // for full historical audit view.
+  const includeExpired = url.searchParams.get("includeExpired") === "true";
 
   // Customers can only see their own company
   let companyId: string | null = null;
@@ -29,7 +33,10 @@ export async function GET(req: NextRequest) {
   }
   // Admin with no filter → companyId stays null = all customers aggregate
 
-  const where = companyId ? { companyId } : {};
+  const baseWhere: Record<string, unknown> = {};
+  if (companyId) baseWhere.companyId = companyId;
+  if (!includeExpired) baseWhere.status = { not: "EXPIRED_NO_SCAN" };
+  const where = baseWhere;
 
   const [
     pieces,
@@ -47,7 +54,12 @@ export async function GET(req: NextRequest) {
       }),
       prisma.mailPiece.count({ where }),
       prisma.scanEvent.count({
-        where: companyId ? { mailPiece: { companyId } } : {},
+        where: {
+          mailPiece: {
+            ...(companyId ? { companyId } : {}),
+            ...(includeExpired ? {} : { status: { not: "EXPIRED_NO_SCAN" } }),
+          },
+        },
       }),
       companyId
         ? prisma.$queryRaw<Array<{ day: Date; delivered: bigint }>>`
@@ -180,11 +192,21 @@ export async function GET(req: NextRequest) {
     ? ttdValues.reduce((s, v) => s + v, 0) / ttdValues.length
     : 0;
 
+  // Count archived (expired) pieces separately so the UI can show them as
+  // context without polluting the main "Total Pieces" KPI.
+  const archivedCount = await prisma.mailPiece.count({
+    where: {
+      ...(companyId ? { companyId } : {}),
+      status: "EXPIRED_NO_SCAN",
+    },
+  });
+
   return NextResponse.json({
     companyId,
     campaignId: "",
     totalQuantity: totalPieceCount,
     pieceCount: totalPieceCount,
+    archivedCount,
     scanCount,
     statusCounts,
     deliveryRate: totalPieceCount ? delivered / totalPieceCount : 0,

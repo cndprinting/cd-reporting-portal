@@ -72,6 +72,7 @@ interface OverviewData {
   companyId: string | null;
   totalQuantity: number;
   pieceCount: number;
+  archivedCount?: number;
   scanCount: number;
   statusCounts: Record<string, number>;
   deliveryRate: number;
@@ -230,11 +231,15 @@ export default function MailTrackingPage() {
       {/* KPIs — only the meaningful ones for this dataset */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          label="Total Pieces"
+          label="Active Pieces"
           value={data.pieceCount}
           icon={Mail}
           iconColor="text-blue-600 bg-blue-100"
-          helpText="Imported into the portal across all campaigns"
+          helpText={
+            data.archivedCount && data.archivedCount > 0
+              ? `${data.archivedCount.toLocaleString()} more archived (drops > 30d, past USPS scan window)`
+              : "Imported into the portal across all active campaigns"
+          }
         />
         <KPICard
           label="Scanned by USPS"
