@@ -57,10 +57,21 @@ export async function GET(
   });
   if (!company) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Aggregate piece + scan stats — useful for the drill-down KPI strip
-  const [pieceCount, scanCount, deliveredCount] = await Promise.all([
-    prisma.mailPiece.count({ where: { companyId: id } }),
-    prisma.scanEvent.count({ where: { mailPiece: { companyId: id } } }),
+  // Aggregate piece + scan stats — useful for the drill-down KPI strip.
+  // Active = excludes EXPIRED_NO_SCAN (drops > 30d ago, past USPS retention).
+  // Archived count returned separately for context.
+  const [pieceCount, archivedCount, scanCount, deliveredCount] = await Promise.all([
+    prisma.mailPiece.count({
+      where: { companyId: id, status: { not: "EXPIRED_NO_SCAN" } },
+    }),
+    prisma.mailPiece.count({
+      where: { companyId: id, status: "EXPIRED_NO_SCAN" },
+    }),
+    prisma.scanEvent.count({
+      where: {
+        mailPiece: { companyId: id, status: { not: "EXPIRED_NO_SCAN" } },
+      },
+    }),
     prisma.mailPiece.count({
       where: {
         companyId: id,
@@ -71,7 +82,7 @@ export async function GET(
 
   return NextResponse.json({
     ...company,
-    stats: { pieceCount, scanCount, deliveredCount },
+    stats: { pieceCount, archivedCount, scanCount, deliveredCount },
   });
 }
 

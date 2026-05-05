@@ -60,10 +60,14 @@ export async function GET(
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
 
+  const includeExpired = url.searchParams.get("includeExpired") === "true";
+
   const pieceWhere: Record<string, unknown> = { companyId };
   if (mid) pieceWhere.imbMailerId = mid;
   if (campaignId) pieceWhere.campaignId = campaignId;
   if (batchId) pieceWhere.mailBatchId = batchId;
+  // Operational view excludes EXPIRED_NO_SCAN (drops > 30d, past USPS window)
+  if (!includeExpired) pieceWhere.status = { not: "EXPIRED_NO_SCAN" };
 
   const batchWhere: Record<string, unknown> = { campaign: { companyId } };
   if (mid) batchWhere.mailerId = mid;
