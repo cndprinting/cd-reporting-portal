@@ -93,6 +93,15 @@ ${
 }
 
 ${
+  order.customDesignUrl
+    ? `<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:14px;margin:16px 0;">
+<div style="font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">🎨 Customer-supplied design</div>
+<a href="${order.customDesignUrl}" style="display:inline-block;margin-top:6px;color:#1e40af;font-weight:600;font-size:14px;">📥 Download ${order.customDesignFileName ?? "design.pdf"}</a>
+</div>`
+    : ""
+}
+
+${
     options.notes
       ? `<div style="background:#fefce8;border-left:4px solid #eab308;padding:14px;margin:20px 0;border-radius:4px;">
 <div style="font-size:12px;font-weight:600;color:#713f12;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Note from sender</div>

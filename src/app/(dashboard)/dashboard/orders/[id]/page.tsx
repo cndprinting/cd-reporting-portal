@@ -370,6 +370,48 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Customer-supplied design PDF (when they used "Use My Own Design" tile).
+          Visible to admin + customer so both can confirm what's printing. */}
+      {(order as { customDesignUrl?: string | null }).customDesignUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              🎨 Customer Design
+            </CardTitle>
+            <p className="text-xs text-stone">
+              Customer-supplied artwork. Tom merges the recipient list onto this for printing.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="text-2xl shrink-0">📄</div>
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">
+                    {(order as { customDesignFileName?: string | null }).customDesignFileName ?? "Design PDF"}
+                  </div>
+                  <div className="text-xs text-emerald-700 mt-0.5">
+                    Uploaded{" "}
+                    {(order as { customDesignUploadedAt?: string | null }).customDesignUploadedAt
+                      ? new Date((order as { customDesignUploadedAt?: string | null }).customDesignUploadedAt!).toLocaleString()
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+              <a
+                href={(order as { customDesignUrl?: string | null }).customDesignUrl!}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-emerald-700 hover:underline font-medium shrink-0"
+              >
+                <Download className="h-3 w-3" /> Download / Preview
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* CSR step: enter the offline Job Ticket # + send to Tom for AccuZIP.
           Hidden once order has progressed past IN_PREP. */}
       {isAdmin &&
