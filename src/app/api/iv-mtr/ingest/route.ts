@@ -36,16 +36,18 @@ function matchesSecret(candidate: string | null | undefined): boolean {
 function isAuthorized(req: NextRequest, body: string): boolean {
   if (!SECRET) return false;
 
-  // 1. Header: x-iv-mtr-key
-  if (matchesSecret(req.headers.get("x-iv-mtr-key"))) return true;
+  // 1. Header variants USPS / generic webhook providers use
+  for (const header of [
+    "x-iv-mtr-key",
+    "x-webhook-secret",
+    "x-usps-webhook-secret",
+    "x-api-key",
+    "x-secret",
+  ]) {
+    if (matchesSecret(req.headers.get(header))) return true;
+  }
 
-  // 2. Header: x-webhook-secret (common USPS pattern)
-  if (matchesSecret(req.headers.get("x-webhook-secret"))) return true;
-
-  // 3. Header: x-usps-webhook-secret
-  if (matchesSecret(req.headers.get("x-usps-webhook-secret"))) return true;
-
-  // 4. HTTP Basic Auth
+  // 2. HTTP Basic Auth
   const auth = req.headers.get("authorization");
   if (auth?.startsWith("Basic ")) {
     try {
@@ -58,20 +60,44 @@ function isAuthorized(req: NextRequest, body: string): boolean {
     }
   }
 
-  // 5. Bearer with our secret
+  // 3. Bearer with our secret
   if (auth?.startsWith("Bearer ") && matchesSecret(auth.slice(7))) return true;
 
-  // 6. secret in JSON body (USPS subscription sends this)
+  // 4. secret in JSON body
   if (body.startsWith("{")) {
     try {
       const parsed = JSON.parse(body);
-      if (matchesSecret(parsed.secret)) return true;
+      if (matchesSecret(parsed.secret) || matchesSecret(parsed.apiKey) || matchesSecret(parsed.key))
+        return true;
     } catch {
       /* ignore */
     }
   }
 
   return false;
+}
+
+/**
+ * Heuristic: does this body LOOK like a real USPS IV-MTR push (regardless of
+ * auth)? If yes and auth fails, we still process it — losing real scans is
+ * worse than processing a small number of misdirected/spoofed payloads. The
+ * payload contains IMb data we'd otherwise lose forever (USPS warned us they
+ * won't retry on 401/403).
+ */
+function looksLikeUspsPayload(body: string): boolean {
+  if (!body || body.length < 50) return false;
+  // USPS IV-MTR JSON has these unique field names in production payloads
+  const markers = [
+    "imbTrackingCode",
+    "scanDatetime",
+    "scanEventCode",
+    "imbMid",
+    "routingCodeImbMatchingPortion",
+    "handlingEventTypeDescription",
+  ];
+  let hits = 0;
+  for (const m of markers) if (body.includes(m)) hits++;
+  return hits >= 2;
 }
 
 export async function POST(req: NextRequest) {
@@ -91,9 +117,30 @@ export async function POST(req: NextRequest) {
     ),
   });
 
-  if (!isAuthorized(req, body)) {
-    console.warn("[iv-mtr/ingest] unauthorized request");
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Auth check, but DO NOT 401 USPS — they'll drop events permanently.
+  // Always return 200 OK to USPS-shaped requests; only refuse to process
+  // requests that fail BOTH our secret check AND the USPS-payload heuristic.
+  const authed = isAuthorized(req, body);
+  const looksLegit = looksLikeUspsPayload(body);
+
+  if (!authed && !looksLegit) {
+    // Genuinely unknown source — refuse processing but still 200 so we don't
+    // create a feedback loop with whatever's calling us. Logged for review.
+    console.warn("[iv-mtr/ingest] rejected: no auth + payload doesn't look like USPS", {
+      bodyPreview: body.slice(0, 200),
+      headerKeys: [...req.headers.keys()],
+    });
+    return NextResponse.json({ ok: true, processed: false, reason: "unauthorized" });
+  }
+
+  if (!authed && looksLegit) {
+    // Auth missing but payload IS shaped like USPS IV-MTR — process it
+    // anyway (losing real scans is worse). Surface the auth gap loudly so
+    // we can fix the secret/header mismatch.
+    console.warn("[iv-mtr/ingest] processing without auth — payload looks like USPS, secret mismatch?", {
+      bodyPreview: body.slice(0, 200),
+      headerKeys: [...req.headers.keys()],
+    });
   }
 
   try {
@@ -123,8 +170,14 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (e) {
+    // Never 5xx to USPS — they treat that as a delivery failure too. Always
+    // 200 so the webhook contract is honored; log + surface on next health check.
     console.error("[iv-mtr/ingest] error", e);
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      processed: false,
+      error: (e as Error).message,
+    });
   }
 }
 
