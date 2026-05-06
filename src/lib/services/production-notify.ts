@@ -27,7 +27,16 @@ export function getDefaultProductionRecipients(): string[] {
 
 export async function notifyProduction(
   orderId: string,
-  options: { recipients: string[]; notes?: string; sentByUserId: string },
+  options: {
+    recipients: string[];
+    notes?: string;
+    sentByUserId: string;
+    /** Job Ticket # the CSR keyed in (matches the offline paper ticket
+     *  Tom sees physically). If provided, saved to Order.jobTicketNumber
+     *  and surfaced prominently in the email subject + body so Tom can
+     *  match the email to the physical ticket on his bench. */
+    jobTicketNumber?: string;
+  },
 ): Promise<{ ok: boolean; error?: string; recipients: string[] }> {
   if (!prisma) return { ok: false, error: "db unavailable", recipients: [] };
 
@@ -50,16 +59,18 @@ export async function notifyProduction(
     : "Not specified";
   const filename = `${order.orderCode}.zip`;
 
+  const ticket = options.jobTicketNumber?.trim();
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,sans-serif;color:#0f172a;line-height:1.6;">
 <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;"><tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
 <tr><td style="padding:24px 28px;background:#0f172a;color:#fff;">
-<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;">New AccuZIP Job</div>
+<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;">${ticket ? `Job Ticket #${ticket}` : "New AccuZIP Job"}</div>
 <div style="font-size:22px;font-weight:700;margin-top:4px;font-family:monospace;">${order.orderCode}</div>
 </td></tr>
 <tr><td style="padding:28px;">
 <p style="margin:0 0 16px;">Hey Tom — a new order is ready for AccuZIP processing.</p>
 <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
+${ticket ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:40%;">Job Ticket #</td><td style="font-weight:700;font-size:18px;color:#B85C3D;">${ticket}</td></tr>` : ""}
 <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:40%;">Customer</td><td style="font-weight:600;">${order.company.name}</td></tr>
 <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Order code</td><td style="font-weight:600;font-family:monospace;">${order.orderCode}</td></tr>
 <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Campaign</td><td style="font-weight:600;">${order.campaign.name}</td></tr>
@@ -110,11 +121,10 @@ C&amp;D Marketing Portal · ${order.orderCode} · ${new Date().toLocaleDateStrin
 </table>
 </td></tr></table></body></html>`;
 
-  const send = await sendEmail({
-    to: recipients,
-    subject: `🖨 New AccuZIP job — ${order.orderCode} (${order.company.name})`,
-    html,
-  });
+  const subject = ticket
+    ? `🎫 Job Ticket #${ticket} — ${order.company.name} ${order.quantity?.toLocaleString() ?? ""} pieces`
+    : `🖨 New AccuZIP job — ${order.orderCode} (${order.company.name})`;
+  const send = await sendEmail({ to: recipients, subject, html });
 
   if (send.ok) {
     // Log the handoff for audit + dashboard visibility
@@ -122,14 +132,19 @@ C&amp;D Marketing Portal · ${order.orderCode} · ${new Date().toLocaleDateStrin
       data: {
         orderId,
         recipients: recipients.join(", "),
-        notes: options.notes ?? null,
+        notes: ticket
+          ? `Job Ticket #${ticket}${options.notes ? ` — ${options.notes}` : ""}`
+          : options.notes ?? null,
         sentByUserId: options.sentByUserId,
       },
     });
-    // Mirror on the order for fast filtering
+    // Save ticket # + flip status to IN_PREP + stamp notification time
     await prisma.order.update({
       where: { id: orderId },
-      data: { productionNotifiedAt: new Date() },
+      data: {
+        productionNotifiedAt: new Date(),
+        ...(ticket ? { jobTicketNumber: ticket, status: "IN_PREP" as const } : {}),
+      },
     });
     return { ok: true, recipients };
   }

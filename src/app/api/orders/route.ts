@@ -165,6 +165,53 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Notify CSR on EVERY new order (DRAFT) — they need to create a job
+  // ticket in C&D's existing offline process, then key the ticket # back
+  // into MailerCity to trigger the production handoff email to Tom.
+  // Skipped for custom-quote requests (those go to admin/sales for pricing
+  // first; CSR notification fires later when quote is accepted).
+  if (!isCustomQuote) {
+    try {
+      const { sendEmail } = await import("@/lib/services/email");
+      const portalUrl = process.env.PORTAL_URL ?? "https://marketing.cndprinting.com";
+      const csrEmails = (process.env.CSR_NOTIFY_EMAIL ?? "kjacobsen@cndprinting.com")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await sendEmail({
+        to: csrEmails,
+        subject: `📋 New order from ${order.company.name} — create job ticket`,
+        html: `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#1A1814;line-height:1.6;padding:24px;background:#FAF7F2;">
+<table cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #E8E0D2;border-radius:8px;overflow:hidden;">
+<tr><td style="padding:24px 32px;border-bottom:1px solid #E8E0D2;">
+<div style="font-family:Georgia,serif;font-size:18px;font-weight:500;">C&amp;D <span style="color:#B85C3D;font-style:italic;">MailerCity</span></div>
+</td></tr>
+<tr><td style="padding:24px 32px;">
+<h2 style="margin:0 0 14px;font-size:18px;">New order — please create a job ticket</h2>
+<p style="margin:0 0 14px;"><strong>${order.company.name}</strong> just submitted an order. Create the job ticket the usual way, then enter the ticket # in MailerCity to send it to Tom for AccuZIP.</p>
+<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin:14px 0;">
+  <tr><td style="color:#6B6660;padding-right:14px;">Order #</td><td><strong><code>${order.orderCode}</code></strong></td></tr>
+  <tr><td style="color:#6B6660;">Customer</td><td>${order.company.name}</td></tr>
+  <tr><td style="color:#6B6660;">Quantity</td><td>${order.quantity?.toLocaleString() ?? "—"}</td></tr>
+  ${order.mailShape ? `<tr><td style="color:#6B6660;">Format</td><td>${order.mailShape}${order.mailClass ? ` · ${order.mailClass}` : ""}</td></tr>` : ""}
+  ${order.dropDate ? `<tr><td style="color:#6B6660;">Drop date</td><td>${new Date(order.dropDate).toLocaleDateString()}</td></tr>` : ""}
+  ${order.totalPrice != null ? `<tr><td style="color:#6B6660;">Estimated total</td><td>$${order.totalPrice.toFixed(2)} (final price reconciled after AccuZIP)</td></tr>` : ""}
+  ${order.description ? `<tr><td style="color:#6B6660;">Description</td><td>${order.description}</td></tr>` : ""}
+</table>
+<p style="margin:20px 0 8px;">
+<a href="${portalUrl}/dashboard/orders/${order.id}" style="display:inline-block;background:#B85C3D;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Open order in MailerCity →</a>
+</p>
+<p style="font-size:12px;color:#6B6660;margin-top:18px;">When you've created the paper job ticket, open the order above, type the ticket # into the &ldquo;Production Handoff&rdquo; panel, and click <em>Send to Production</em>. That emails Tom with everything he needs to AccuZIP the file.</p>
+</td></tr>
+<tr><td style="padding:14px 32px;background:#FAF7F2;color:#6B6660;font-size:11px;border-top:1px solid #E8E0D2;text-align:center;">marketing.cndprinting.com &middot; C&amp;D Printing</td></tr>
+</table>
+</body></html>`,
+      });
+    } catch (e) {
+      console.error("[orders] CSR notify failed", e);
+    }
+  }
+
   // Notify admins on quote requests (Resend, branded)
   if (isCustomQuote) {
     try {

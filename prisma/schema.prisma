@@ -528,6 +528,11 @@ model Order {
   // lives in ProductionHandoff (one row per send, multi-recipient).
   productionNotifiedAt DateTime?
   productionHandoffs   ProductionHandoff[]
+  // Job ticket # — created offline by CSR in C&D's existing process
+  // (paper / E&M DOS), then keyed back into MailerCity so Tom's production
+  // email references the same ticket the physical job is attached to.
+  // Becomes obsolete when Godzilla's job-ticket system is wired in.
+  jobTicketNumber      String?
 
   // ── Final Quantity Reconciliation ────────────────────────────────────
   // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is

@@ -10,7 +10,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { notifyProduction } from "@/lib/services/production-notify";
+import {
+  notifyProduction,
+  getDefaultProductionRecipients,
+} from "@/lib/services/production-notify";
 
 export const runtime = "nodejs";
 
@@ -25,14 +28,23 @@ export async function POST(
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const recipients: string[] = Array.isArray(body.recipients) ? body.recipients : [];
+  // Default to PRODUCTION_NOTIFY_EMAIL env if caller didn't override —
+  // the typical CSR flow only passes the ticket # + notes.
+  const recipients: string[] =
+    Array.isArray(body.recipients) && body.recipients.length > 0
+      ? body.recipients
+      : getDefaultProductionRecipients();
   if (recipients.length === 0) {
-    return NextResponse.json({ error: "no recipients" }, { status: 400 });
+    return NextResponse.json(
+      { error: "no recipients (PRODUCTION_NOTIFY_EMAIL env not set?)" },
+      { status: 400 },
+    );
   }
 
   const result = await notifyProduction(id, {
     recipients,
     notes: body.notes,
+    jobTicketNumber: body.jobTicketNumber,
     sentByUserId: session.id,
   });
 

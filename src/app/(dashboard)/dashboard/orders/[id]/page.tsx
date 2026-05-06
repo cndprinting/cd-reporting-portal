@@ -370,6 +370,19 @@ export default function OrderDetailPage() {
         </CardContent>
       </Card>
 
+      {/* CSR step: enter the offline Job Ticket # + send to Tom for AccuZIP.
+          Hidden once order has progressed past IN_PREP. */}
+      {isAdmin &&
+        ["DRAFT", "QUOTE_PROVIDED", "IN_PREP"].includes(order.status) && (
+          <ProductionHandoffCard
+            orderId={id!}
+            orderCode={order.orderCode}
+            currentTicket={(order as { jobTicketNumber?: string | null }).jobTicketNumber ?? null}
+            currentStatus={order.status}
+            onSent={reload}
+          />
+        )}
+
       {/* Admin-only: upload AccuZIP Mail.dat output for this order */}
       {isAdmin && <MailDatUploadCard orderId={id!} orderCode={order.orderCode} />}
 
@@ -1679,6 +1692,116 @@ function RetargetingUpsellCard({ orderId }: { orderId: string }) {
                 : "Notify me when available"}
             </Button>
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * CSR's production handoff: enter the offline Job Ticket # + click send.
+ * Triggers the production email to Tom (PRODUCTION_NOTIFY_EMAIL env) with
+ * the ticket # surfaced prominently so he can match it to the physical
+ * paper ticket on his bench. Order status flips to IN_PREP.
+ */
+function ProductionHandoffCard({
+  orderId,
+  orderCode,
+  currentTicket,
+  currentStatus,
+  onSent,
+}: {
+  orderId: string;
+  orderCode: string;
+  currentTicket: string | null;
+  currentStatus: string;
+  onSent: () => void;
+}) {
+  const [ticket, setTicket] = useState(currentTicket ?? "");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const alreadySent = currentStatus === "IN_PREP" && !!currentTicket;
+
+  const send = async () => {
+    if (!ticket.trim()) {
+      setErr("Job Ticket # is required");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/send-to-production`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jobTicketNumber: ticket.trim(), notes: notes.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) {
+        setErr(d.error ?? "Send failed");
+        return;
+      }
+      onSent();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="border-brand-200">
+      <CardHeader className="bg-brand-50/50 border-b border-line">
+        <CardTitle className="flex items-center gap-2 text-base">
+          🎫 Production Handoff
+          {alreadySent && (
+            <Badge variant="success" className="ml-2">
+              Sent · Ticket #{currentTicket}
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-xs text-stone mt-1">
+          {alreadySent
+            ? "Already sent to production. Resending uses the same ticket # unless you change it below."
+            : "After creating the paper job ticket the usual way, type the ticket # here and click Send. Tom gets emailed the order details, recipient list, and ticket # so he can AccuZIP the file."}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-4">
+        <div>
+          <label className="text-xs font-semibold text-ink uppercase tracking-wider block mb-1">
+            Job Ticket # *
+          </label>
+          <Input
+            placeholder="e.g. 261432"
+            value={ticket}
+            onChange={(e) => setTicket(e.target.value)}
+          />
+          <div className="text-[11px] text-stone mt-1">
+            Match the # on the physical job ticket you just created for {orderCode}.
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-ink uppercase tracking-wider block mb-1">
+            Notes for Tom (optional)
+          </label>
+          <textarea
+            className="w-full min-h-[60px] rounded border border-line bg-white px-3 py-2 text-sm"
+            placeholder="Any special instructions — paper stock, finishing, deadline urgency, etc."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+        {err && (
+          <div className="rounded bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
+            {err}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <Button onClick={send} disabled={busy || !ticket.trim()}>
+            {busy
+              ? "Sending…"
+              : alreadySent
+                ? "Resend to Production"
+                : "Send to Production"}
+          </Button>
         </div>
       </CardContent>
     </Card>
