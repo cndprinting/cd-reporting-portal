@@ -102,6 +102,16 @@ ${
 }
 
 ${
+  order.qrDestinationUrl
+    ? `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:14px;margin:16px 0;">
+<div style="font-size:12px;color:#5b21b6;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">🔗 QR Code Destination URL</div>
+<div style="margin-top:6px;font-family:monospace;font-size:13px;color:#1e1b4b;word-break:break-all;">${order.qrDestinationUrl}</div>
+<div style="margin-top:8px;font-size:11px;color:#5b21b6;">Encode this URL in the QR code on every piece — that's where recipients land when they scan.</div>
+</div>`
+    : ""
+}
+
+${
     options.notes
       ? `<div style="background:#fefce8;border-left:4px solid #eab308;padding:14px;margin:20px 0;border-radius:4px;">
 <div style="font-size:12px;font-weight:600;color:#713f12;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Note from sender</div>

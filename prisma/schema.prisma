@@ -534,6 +534,12 @@ model Order {
   // Becomes obsolete when Godzilla's job-ticket system is wired in.
   jobTicketNumber      String?
 
+  // ── QR code destination ────────────────────────────────────────────
+  // When the mailer design includes a QR code, this is the URL recipients
+  // are sent to when they scan. Production embeds it in the merged PDFs.
+  // Optional — only customers who want to use QR codes set it.
+  qrDestinationUrl     String?
+
   // ── Final Quantity Reconciliation ────────────────────────────────────
   // After AccuZIP does CASS/NCOA/dedupe, the *real* mailable count is
   // usually smaller than what the customer uploaded. We adjust quantity

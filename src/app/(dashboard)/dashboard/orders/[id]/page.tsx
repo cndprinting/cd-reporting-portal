@@ -412,6 +412,44 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
+      {/* QR Code destination URL (when customer added one at order time).
+          Tom needs this to encode the QR on each printed piece. */}
+      {(order as { qrDestinationUrl?: string | null }).qrDestinationUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              🔗 QR Code Destination
+            </CardTitle>
+            <p className="text-xs text-stone">
+              Encode this URL into the QR code on every piece in this order.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <a
+                href={(order as { qrDestinationUrl?: string | null }).qrDestinationUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-blue-900 break-all hover:underline"
+              >
+                {(order as { qrDestinationUrl?: string | null }).qrDestinationUrl}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    (order as { qrDestinationUrl?: string | null }).qrDestinationUrl ?? "",
+                  );
+                }}
+                className="ml-3 shrink-0 text-xs text-blue-700 hover:underline font-medium"
+              >
+                Copy
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* CSR step: enter the offline Job Ticket # + send to Tom for AccuZIP.
           Hidden once order has progressed past IN_PREP. */}
       {isAdmin &&

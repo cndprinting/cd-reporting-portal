@@ -123,6 +123,8 @@ export async function POST(req: NextRequest) {
       // Prepaid package draw-down — when set, charge today is $0; package
       // balance is decremented + audit row written below.
       packageId: body.packageId ?? null,
+      // Optional QR code destination URL — production embeds in merged PDFs
+      qrDestinationUrl: body.qrDestinationUrl ?? null,
     },
     include: {
       company: { select: { name: true, users: { select: { email: true } } } },

@@ -140,6 +140,9 @@ export default function NewOrderPage() {
   } | null>(null);
   const [usePackage, setUsePackage] = useState(false);
 
+  // Optional QR code destination — production embeds in merged PDFs
+  const [qrDestinationUrl, setQrDestinationUrl] = useState("");
+
   useEffect(() => {
     fetch("/api/templates").then((r) => r.json()).then((d) => setTemplates(d.templates ?? []));
     fetch("/api/campaigns")
@@ -368,10 +371,17 @@ export default function NewOrderPage() {
               Object.keys(moduleFields).length > 0 ? moduleFields : undefined,
           };
 
+      // QR destination URL is universal across all order paths — inject it
+      // here rather than into each branch above.
+      const bodyWithExtras = {
+        ...orderBody,
+        ...(qrDestinationUrl.trim() ? { qrDestinationUrl: qrDestinationUrl.trim() } : {}),
+      };
+
       const r = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderBody),
+        body: JSON.stringify(bodyWithExtras),
       });
       if (!r.ok) {
         const d = await r.json();
@@ -947,6 +957,39 @@ export default function NewOrderPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* QR CODE DESTINATION — optional, for designs that include a QR. The
+          URL is embedded into the QR at print time so recipients who scan
+          land at the customer's chosen destination (offer page, lead form,
+          calendar booking, etc.). Skipped for custom-quote-only orders. */}
+      {!useCustomQuote && (sheet || useCustomDesign) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              🔗 QR Code Destination
+              <span className="text-xs font-normal text-stone ml-1">(optional)</span>
+            </CardTitle>
+            <p className="text-xs text-stone mt-1">
+              If your mailer has a QR code, enter the URL recipients should land
+              on when they scan. Leave blank if your design has no QR code.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Input
+              type="url"
+              placeholder="https://bhlandgroup.co/sell-your-land"
+              value={qrDestinationUrl}
+              onChange={(e) => setQrDestinationUrl(e.target.value)}
+            />
+            <div className="text-[11px] text-stone mt-2 leading-relaxed">
+              Use a URL you can track (e.g., add{" "}
+              <code className="bg-paper-soft px-1 rounded">?ref=mailer</code> so
+              you can tell which scans came from this mailing). The QR code on
+              each piece will encode this URL exactly.
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* STEP 3: PRICE + DROP DATE + SUBMIT */}
       <Card
