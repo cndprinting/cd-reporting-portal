@@ -107,11 +107,27 @@ export async function GET(
   const delivered =
     (statusCounts.DELIVERED ?? 0) + (statusCounts.DELIVERED_INFERRED ?? 0);
 
+  // Resolve campaign names so the customer view doesn't show raw cuid strings
+  const campaignIds = [...new Set(byCampaign.map((r) => r.campaignId))];
+  const campaignRows = campaignIds.length
+    ? await prisma.campaign.findMany({
+        where: { id: { in: campaignIds } },
+        select: { id: true, name: true, campaignCode: true },
+      })
+    : [];
+  const nameById = new Map(campaignRows.map((c) => [c.id, c]));
+
   // Roll up per-campaign summary
-  const campaignMap = new Map<string, { campaignId: string; total: number; delivered: number }>();
+  const campaignMap = new Map<
+    string,
+    { campaignId: string; name: string; campaignCode: string; total: number; delivered: number }
+  >();
   for (const row of byCampaign) {
+    const meta = nameById.get(row.campaignId);
     const entry = campaignMap.get(row.campaignId) ?? {
       campaignId: row.campaignId,
+      name: meta?.name ?? row.campaignId,
+      campaignCode: meta?.campaignCode ?? "",
       total: 0,
       delivered: 0,
     };

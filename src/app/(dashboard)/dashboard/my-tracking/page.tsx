@@ -25,7 +25,13 @@ interface TrackingData {
   companyId: string;
   totals: { pieces: number; delivered: number; deliveryRate: number };
   statusCounts: Record<string, number>;
-  perCampaign: Array<{ campaignId: string; total: number; delivered: number }>;
+  perCampaign: Array<{
+    campaignId: string;
+    name: string;
+    campaignCode: string;
+    total: number;
+    delivered: number;
+  }>;
   perMailerId: Array<{ mid: string | null; count: number }>;
   batches: Array<{
     id: string;
@@ -48,8 +54,9 @@ export default function MyTrackingPage() {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((d) => {
-        const cid = d?.user?.companyId ?? d?.companyId ?? "demo-company-1";
+        const cid = d?.user?.companyId ?? d?.companyId ?? null;
         setCompanyId(cid);
+        if (!cid) return Promise.resolve({ json: () => Promise.resolve(null) } as unknown as Response);
         return fetch(`/api/mailers/${cid}/tracking`);
       })
       .then((r) => r.json())
@@ -67,10 +74,12 @@ export default function MyTrackingPage() {
 
   const { totals, statusCounts } = data;
   const ofd = statusCounts.OUT_FOR_DELIVERY ?? 0;
+  // "In Transit" = pieces with USPS scan activity but not yet delivered.
+  // PENDING pieces (no scan yet) are excluded — they're awaiting USPS pickup,
+  // not actually moving through the network.
   const inTransit =
-    (statusCounts.IN_TRANSIT ?? 0) +
-    (statusCounts.ACCEPTED ?? 0) +
-    (statusCounts.PENDING ?? 0);
+    (statusCounts.IN_TRANSIT ?? 0) + (statusCounts.ACCEPTED ?? 0);
+  const pending = statusCounts.PENDING ?? 0;
   const undeliv = statusCounts.UNDELIVERABLE ?? 0;
 
   return (
@@ -101,7 +110,11 @@ export default function MyTrackingPage() {
           value={inTransit}
           icon={Truck}
           iconColor="text-amber-600 bg-amber-100"
-          helpText="Accepted and moving through USPS"
+          helpText={
+            pending > 0
+              ? `Moving through USPS · ${pending.toLocaleString()} also awaiting first scan`
+              : "Accepted and moving through USPS"
+          }
         />
         <KPICard
           label="Out For Delivery"
@@ -152,7 +165,12 @@ export default function MyTrackingPage() {
             <tbody>
               {data.perCampaign.map((c) => (
                 <tr key={c.campaignId} className="border-b last:border-0">
-                  <td className="py-3 font-mono text-xs">{c.campaignId}</td>
+                  <td className="py-3">
+                    <div className="font-medium text-sm">{c.name}</div>
+                    {c.campaignCode && (
+                      <div className="text-xs text-stone font-mono">{c.campaignCode}</div>
+                    )}
+                  </td>
                   <td className="text-right">{c.total.toLocaleString()}</td>
                   <td className="text-right">{c.delivered.toLocaleString()}</td>
                   <td className="text-right">
