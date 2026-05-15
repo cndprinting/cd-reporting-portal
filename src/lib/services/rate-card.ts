@@ -16,8 +16,8 @@
  */
 
 export const RATE_CARD_VERSION = "2026-05-presummer";
-export const EFFECTIVE_DATE = "May & June 2026 · Pre-Summer Sale";
-export const RATE_CARD_EXPIRES = "June 30, 2026";
+export const EFFECTIVE_DATE = "Pre-Summer Sale · ends May 31";
+export const RATE_CARD_EXPIRES = "May 31, 2026";
 export const POSTAGE_PER_UNIT = 0.43; // USPS Marketing/Standard Class
 
 export type PostcardSize = "4.25x6" | "6x8.5" | "6x11";
