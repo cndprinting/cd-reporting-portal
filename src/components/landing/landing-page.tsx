@@ -52,6 +52,12 @@ function Header() {
           </div>
         </Link>
         <div className="flex items-center gap-2">
+          <Link
+            href="/case-studies"
+            className="hidden md:inline-flex items-center px-4 h-10 rounded text-ink text-sm font-medium hover:bg-paper-soft transition-colors"
+          >
+            Case studies
+          </Link>
           <a
             href="#get-started"
             className="hidden sm:inline-flex items-center px-4 h-10 rounded bg-ink text-paper text-sm font-medium hover:bg-ink-soft transition-colors"
@@ -555,6 +561,11 @@ function Footer() {
                 <a href="#rate-card" className="hover:text-brand-300">
                   Pricing
                 </a>
+              </li>
+              <li>
+                <Link href="/case-studies" className="hover:text-brand-300">
+                  Case studies
+                </Link>
               </li>
               <li>
                 <a href="#get-started" className="hover:text-brand-300">
