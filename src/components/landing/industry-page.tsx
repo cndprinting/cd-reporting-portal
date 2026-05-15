@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Industry } from "@/lib/industries";
+import { IndustriesDropdown } from "./industries-dropdown";
 
 interface TierRow {
   minQty: number;
@@ -52,7 +53,10 @@ function Header() {
             </div>
           </div>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <div className="hidden md:block">
+            <IndustriesDropdown />
+          </div>
           <Link
             href="/case-studies"
             className="hidden md:inline-flex items-center px-4 h-10 rounded text-ink text-sm font-medium hover:bg-paper-soft transition-colors"
@@ -61,13 +65,13 @@ function Header() {
           </Link>
           <a
             href="#get-started"
-            className="hidden sm:inline-flex items-center px-4 h-10 rounded bg-ink text-paper text-sm font-medium hover:bg-ink-soft transition-colors"
+            className="hidden sm:inline-flex items-center px-4 h-10 rounded bg-ink text-paper text-sm font-medium hover:bg-ink-soft transition-colors ml-2"
           >
             Request a quote
           </a>
           <Link
             href="/login"
-            className="inline-flex items-center px-4 h-10 rounded border border-line bg-white text-ink text-sm font-medium hover:bg-paper-soft transition-colors"
+            className="inline-flex items-center px-4 h-10 rounded border border-line bg-white text-ink text-sm font-medium hover:bg-paper-soft transition-colors ml-1"
           >
             Sign in
           </Link>
