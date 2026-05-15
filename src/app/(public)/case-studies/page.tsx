@@ -274,7 +274,7 @@ function Header() {
             href="/#get-started"
             className="hidden sm:inline-flex items-center px-4 h-10 rounded bg-ink text-paper text-sm font-medium hover:bg-ink-soft transition-colors"
           >
-            Get started
+            Request a quote
           </Link>
           <Link
             href="/login"
@@ -319,7 +319,7 @@ function PublicFooter() {
               </li>
               <li>
                 <Link href="/#get-started" className="hover:text-brand-300">
-                  Get started
+                  Request a quote
                 </Link>
               </li>
               <li>

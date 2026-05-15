@@ -62,7 +62,7 @@ function Header() {
             href="#get-started"
             className="hidden sm:inline-flex items-center px-4 h-10 rounded bg-ink text-paper text-sm font-medium hover:bg-ink-soft transition-colors"
           >
-            Get started
+            Request a quote
           </a>
           <Link
             href="/login"
@@ -98,7 +98,7 @@ function Hero() {
               href="#get-started"
               className="inline-flex items-center px-6 h-12 rounded bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
             >
-              Get started →
+              Request a quote →
             </a>
             <a
               href="#rate-card"
@@ -415,7 +415,7 @@ function GetStarted() {
         <div className="grid lg:grid-cols-12 gap-12">
           <div className="lg:col-span-5">
             <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-stone mb-4">
-              Get started
+              Request a quote
             </div>
             <h2 className="font-display text-3xl lg:text-4xl font-medium mb-6 leading-tight">
               Tell us about your <span className="italic text-brand-600">mailing</span>.
@@ -565,7 +565,7 @@ function Footer() {
               </li>
               <li>
                 <a href="#get-started" className="hover:text-brand-300">
-                  Get started
+                  Request a quote
                 </a>
               </li>
               <li>
