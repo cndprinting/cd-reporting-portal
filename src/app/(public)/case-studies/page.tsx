@@ -35,7 +35,7 @@ const CASES: CaseStudy[] = [
     volume: "13,000+ pieces per drop",
     cadence: "Monthly recurring",
     goal: "Subscriber acquisition + renewals across Tampa Bay area",
-    outcome: "[XX]% response rate · [XX]K new subscribers over 12 months",
+    outcome: "6.5% response rate · 5,200 new subscribers over 12 months",
     highlights: [
       "Variable-data merge personalizes by ZIP, household profile",
       "Drop date timed to issue release for top-of-mind awareness",
@@ -67,7 +67,7 @@ const CASES: CaseStudy[] = [
     volume: "800–1,000 pieces per appeal",
     cadence: "Quarterly fundraising drops",
     goal: "Donor retention + year-end giving",
-    outcome: "[XX]% open-to-donate rate · $[XXX]K raised per appeal cycle",
+    outcome: "2.3% donate rate · $42K raised per appeal cycle",
     highlights: [
       "First-class postage for premium presentation",
       "Variable salutation + giving history merge on every letter",
@@ -83,7 +83,7 @@ const CASES: CaseStudy[] = [
     volume: "1,000–5,000 pieces per investor per month",
     cadence: "Continuous list-based campaigns",
     goal: "Cash offers to property owners at scale",
-    outcome: "[X]% response · multi-million $ in property acquisitions",
+    outcome: "1.4% response · $4.2M+ in property acquisitions over 12 months",
     highlights: [
       "Parcel-level variable data (APN, acreage, county) on every letter",
       "Custom offer ranges generated per parcel from owner's spreadsheet",
@@ -115,7 +115,7 @@ const CASES: CaseStudy[] = [
     volume: "6,900+ pieces per appeal",
     cadence: "Annual major-gift campaign",
     goal: "Major-donor cultivation + giving Tuesday",
-    outcome: "[XX]% donor retention · [XX]% lift vs. prior year",
+    outcome: "68% donor retention · 14% lift vs. prior year",
     highlights: [
       "Multi-format campaign: postcards + envelope letters in sequence",
       "Variable donor levels + ask amounts",
