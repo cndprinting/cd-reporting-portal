@@ -89,8 +89,8 @@ export const INDUSTRIES: Industry[] = [
     prefillBody:
       "Land investor mailing — letters to property owners with APN, acreage, county, and offer-range merge fields. Looking for [QTY] pieces, drop [TIMING].",
     stats: [
-      { label: "Typical response rate", value: "0.5–2%" },
       { label: "Variable fields", value: "APN, acreage, offers, QR" },
+      { label: "Common format", value: "Letter · 1-Sheet" },
       { label: "Rate-card minimum", value: "1,000 pieces" },
     ],
   },
@@ -151,9 +151,9 @@ export const INDUSTRIES: Industry[] = [
     prefillBody:
       "Real estate mailing — looking for [postcards / letters] to [neighborhood / farm area]. Approximately [QTY] pieces, drop [TIMING].",
     stats: [
-      { label: "Typical response rate", value: "0.5–2.5%" },
       { label: "Common formats", value: "Postcards + letters" },
       { label: "Recurring cadence", value: "Monthly farming" },
+      { label: "Production turn", value: "5–7 business days" },
     ],
   },
   {
@@ -212,9 +212,9 @@ export const INDUSTRIES: Industry[] = [
     prefillBody:
       "Nonprofit mailing — [annual appeal / year-end / acquisition] to [QTY] donors. Drop date target [TIMING]. First-class or Standard?",
     stats: [
-      { label: "Typical donor response", value: "1–3%" },
-      { label: "Average gift", value: "$50–150" },
-      { label: "Year-end ROI", value: "3–5x" },
+      { label: "Common formats", value: "Letters · 1- and 2-sheet" },
+      { label: "Postage options", value: "Standard or First Class" },
+      { label: "Production turn", value: "5–7 business days" },
     ],
   },
   {
