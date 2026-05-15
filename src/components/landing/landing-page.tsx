@@ -40,12 +40,16 @@ function Header() {
   return (
     <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center">
-          <img
-            src="/logo-mailercity.png"
-            alt="C&D MailerCity — We run your mail marketing"
-            className="h-10 w-auto"
-          />
+        <Link href="/" className="flex items-center gap-3">
+          <img src="/logo-icon.svg" alt="" className="h-9 w-9" />
+          <div className="leading-tight">
+            <div className="font-display text-lg font-medium">
+              C&amp;D <span className="italic text-brand-600">MailerCity</span>
+            </div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-stone">
+              Direct mail, printed and tracked.
+            </div>
+          </div>
         </Link>
         <div className="flex items-center gap-2">
           <a
@@ -534,11 +538,9 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           <div>
-            <img
-              src="/logo-mailercity.png"
-              alt="C&D MailerCity"
-              className="h-10 w-auto mb-3 bg-white rounded px-2 py-1.5 inline-block"
-            />
+            <div className="font-display text-lg font-medium mb-2">
+              C&amp;D <span className="italic text-brand-300">MailerCity</span>
+            </div>
             <p className="text-sm text-paper/70 leading-relaxed">
               Direct mail printed and tracked. A C&amp;D Printing &amp;
               Packaging Co. product.
