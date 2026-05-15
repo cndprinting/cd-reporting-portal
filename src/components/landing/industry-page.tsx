@@ -121,7 +121,11 @@ function Hero({ industry }: { industry: Industry }) {
         </div>
 
         {/* Stats strip */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 pt-8 border-t border-line">
+        <div
+          className={`grid grid-cols-1 gap-4 mt-12 pt-8 border-t border-line max-w-3xl ${
+            industry.stats.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"
+          }`}
+        >
           {industry.stats.map((s) => (
             <div key={s.label}>
               <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-stone mb-1">
