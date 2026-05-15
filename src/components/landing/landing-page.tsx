@@ -597,7 +597,7 @@ function Footer() {
         </div>
         <div className="border-t border-paper/10 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-paper/50">
           <div>
-            © {new Date().getFullYear()} C&amp;D Printing &amp; Packaging Co. ·
+            © {new Date().getFullYear()}{" "}C&amp;D Printing &amp; Packaging Co. ·
             Printing Excellence Since 1973.
           </div>
           <div className="font-mono">G7 Master Qualified · FSC Certified</div>
