@@ -428,15 +428,6 @@ function GetStarted() {
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <span className="text-brand-600 mt-0.5">✉</span>
-                <div>
-                  <div className="font-medium text-ink">
-                    marketing@cndprinting.com
-                  </div>
-                  <div className="text-xs text-stone">Direct to MailerCity team</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
                 <span className="text-brand-600 mt-0.5">📍</span>
                 <div>
                   <div className="font-medium text-ink">12150 28th St N</div>
