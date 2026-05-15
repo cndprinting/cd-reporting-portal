@@ -78,7 +78,7 @@ const CASES: CaseStudy[] = [
   },
   {
     industry: "Land Investor Network",
-    size: "23-member buying group",
+    size: "10-member buying group",
     format: "Letters · variable-offer mailers · APN-merged",
     volume: "1,000–5,000 pieces per investor per month",
     cadence: "Continuous list-based campaigns",
