@@ -139,7 +139,8 @@ export default function CaseStudiesPage() {
           </div>
           <h1 className="font-display text-4xl lg:text-5xl font-medium leading-[1.1] tracking-tight max-w-3xl">
             Real direct mail campaigns,{" "}
-            <span className="italic text-brand-600">printed and tracked</span> by C&amp;D.
+            <span className="italic text-brand-600 pr-3">printed and tracked</span>
+            {" "}by C&amp;D.
           </h1>
           <p className="text-lg text-ink-soft mt-6 max-w-2xl leading-relaxed">
             Customer names are withheld out of respect for our clients. The
