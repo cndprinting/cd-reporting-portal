@@ -9,6 +9,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { IndustriesDropdown } from "./industries-dropdown";
+import { trackLead } from "@/components/analytics/facebook-pixel";
+import { MobileCtaBar } from "./mobile-cta-bar";
 
 interface TierRow {
   minQty: number;
@@ -33,6 +35,7 @@ export function LandingPage({ rateCard }: { rateCard: RateCard }) {
       <UseCases />
       <GetStarted />
       <Footer />
+      <MobileCtaBar />
     </div>
   );
 }
@@ -428,6 +431,7 @@ function GetStarted() {
         setErr(d.error ?? "Something went wrong");
         return;
       }
+      trackLead({ source: "landing" });
       setSubmitted(true);
     } finally {
       setBusy(false);
@@ -625,7 +629,11 @@ function Footer() {
             © {new Date().getFullYear()}{" "}C&amp;D Printing &amp; Packaging Co. ·
             Printing Excellence Since 1973.
           </div>
-          <div className="font-mono">G7 Master Qualified · FSC Certified</div>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-brand-300">Privacy</Link>
+            <Link href="/terms" className="hover:text-brand-300">Terms</Link>
+            <span className="font-mono">G7 · FSC Certified</span>
+          </div>
         </div>
       </div>
     </footer>

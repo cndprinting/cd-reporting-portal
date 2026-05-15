@@ -18,14 +18,49 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const { name, email, company, phone, message, industry, hp } = body as Record<
-    string,
-    string | undefined
-  >;
+  const {
+    name,
+    email,
+    company,
+    phone,
+    message,
+    industry,
+    hp,
+    turnstileToken,
+  } = body as Record<string, string | undefined>;
 
   // Honeypot: bots fill hidden fields, humans don't
   if (hp && hp.trim().length > 0) {
     return NextResponse.json({ ok: true });
+  }
+
+  // Cloudflare Turnstile verification — only enforced when TURNSTILE_SECRET
+  // env var is set. Allows the form to keep working before Turnstile is
+  // wired up. Once you create a Turnstile site at
+  // https://dash.cloudflare.com/?to=/:account/turnstile, set:
+  //   NEXT_PUBLIC_TURNSTILE_SITE_KEY (client widget) + TURNSTILE_SECRET (server verify)
+  const turnstileSecret = process.env.TURNSTILE_SECRET;
+  if (turnstileSecret) {
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "captcha required" }, { status: 400 });
+    }
+    try {
+      const verify = await fetch(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ secret: turnstileSecret, response: turnstileToken }),
+        },
+      );
+      const data = (await verify.json()) as { success: boolean };
+      if (!data.success) {
+        return NextResponse.json({ error: "captcha failed" }, { status: 400 });
+      }
+    } catch (e) {
+      console.warn("[leads] turnstile verify failed open", e);
+      // fail-open: don't lose leads if Turnstile is down
+    }
   }
 
   if (!name?.trim() || !email?.trim()) {

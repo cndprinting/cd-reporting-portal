@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Newsreader, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
+import { FacebookPixel } from "@/components/analytics/facebook-pixel";
 
 // Editorial display serif — used for headlines + emphasis (italics)
 const newsreader = Newsreader({
@@ -41,6 +42,7 @@ export default function RootLayout({
       className={`${newsreader.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="h-full bg-paper text-ink font-sans">
+        <FacebookPixel />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
