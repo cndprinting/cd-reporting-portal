@@ -79,9 +79,9 @@ export function LandInvestorPricingCard({ quantity, value, onChange }: Props) {
       <CardHeader className="bg-emerald-50/50 border-b border-emerald-200">
         <CardTitle className="flex items-center gap-2 text-base">
           <DollarSign className="h-4 w-4 text-emerald-700" />
-          Standard Rate Card pricing
+          Pre-Summer Sale pricing
           <Badge variant="success" className="ml-2">
-            Effective {EFFECTIVE_DATE}
+            {EFFECTIVE_DATE}
           </Badge>
         </CardTitle>
         <p className="text-xs text-stone mt-1">

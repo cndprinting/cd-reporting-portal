@@ -245,8 +245,11 @@ function RateCardSection({ rateCard }: { rateCard: RateCard }) {
   return (
     <section id="rate-card" className="border-b border-line bg-paper-soft">
       <div className="max-w-6xl mx-auto px-6 py-16 lg:py-20">
-        <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-stone mb-4">
-          Standard rate card · Effective {rateCard.effective}
+        <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-brand-600 mb-4">
+          <span className="bg-brand-100 text-brand-700 px-2 py-0.5 rounded">
+            Pre-Summer Sale
+          </span>
+          <span className="text-stone">May &amp; June 2026</span>
         </div>
         <h2 className="font-display text-3xl lg:text-4xl font-medium mb-2 max-w-2xl leading-tight">
           <span className="italic text-brand-600">Transparent</span> pricing,
@@ -255,6 +258,7 @@ function RateCardSection({ rateCard }: { rateCard: RateCard }) {
         <p className="text-ink-soft mb-8 max-w-2xl">
           Per-piece printing only. Standard Class postage is{" "}
           <strong>${rateCard.postage.toFixed(2)}/piece</strong> on top.
+          Pricing below is locked through <strong>June 30, 2026</strong>.
         </p>
 
         <div className="inline-flex items-center rounded-lg bg-white border border-line p-1 mb-6">
