@@ -363,6 +363,12 @@ function UseCases() {
       title: "Patient family communications + program launches",
       body: "Auditable per-piece delivery for clinical communications, program announcements, and family notifications.",
     },
+    {
+      slug: "home-services",
+      tag: "Home services",
+      title: "Neighborhood saturation for HVAC, plumbing & trades",
+      body: "EDDM saturation, season-timed tune-up campaigns, and 'just serviced nearby' postcards — tracked piece by piece.",
+    },
   ];
 
   return (

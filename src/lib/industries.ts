@@ -338,6 +338,67 @@ export const INDUSTRIES: Industry[] = [
       { label: "List hygiene", value: "CASS + NCOA included" },
     ],
   },
+  {
+    slug: "home-services",
+    nav: "Home Services",
+    tagline:
+      "Neighborhood saturation, seasonal campaigns, and 'just serviced nearby' postcards for HVAC, plumbing, electrical, roofing, and more.",
+    hero: {
+      headline: "Direct mail for {italic} contractors.",
+      italicWord: "home services",
+    },
+    subhead:
+      "HVAC, plumbing, electrical, roofing, landscaping, pest control — direct mail is how home-service businesses fill the schedule. Saturate a neighborhood, time it to the season, and track every piece.",
+    pain: "Home-service marketing lives or dies on timing and saturation. A tune-up mailer that lands two weeks before the summer heat works; one that lands after doesn't. Most contractors mail blind — no idea when pieces actually hit, no way to tie a busy phone week to a specific drop.",
+    why: [
+      {
+        icon: "🏘",
+        title: "EDDM saturation — no list needed",
+        body: "Blanket entire carrier routes with Every Door Direct Mail. Pick the neighborhoods, we handle the routing. Ideal for first-time-in-market campaigns.",
+      },
+      {
+        icon: "🌡",
+        title: "Season-timed drops",
+        body: "HVAC tune-ups before summer, furnace checks before winter, roof inspections after storm season. We pick induction dates so pieces land in the right window.",
+      },
+      {
+        icon: "📍",
+        title: "“Just serviced nearby” postcards",
+        body: "After a job, mail the surrounding homes — “we just helped your neighbor.” Highest-trust trigger in home services, and easy to run as a recurring radius mailing.",
+      },
+      {
+        icon: "📞",
+        title: "Tie phone volume to drops",
+        body: "Use a tracked number + QR code per campaign. Finally know which mailing actually filled the schedule — and which neighborhood to hit again.",
+      },
+    ],
+    useCases: [
+      {
+        title: "Neighborhood saturation (EDDM)",
+        body: "Blanket every home on chosen carrier routes — no mailing list required. The fastest way to announce a service area or a new location.",
+      },
+      {
+        title: "Seasonal tune-up campaigns",
+        body: "HVAC, furnace, gutter, irrigation — recurring mailers timed to the season when homeowners are thinking about it.",
+      },
+      {
+        title: "Radius / 'just serviced' mailers",
+        body: "Drop postcards to homes near a completed job. Recurring, automated radius mailings around your service calls.",
+      },
+      {
+        title: "New-mover outreach",
+        body: "Target households that just bought a home — they need a plumber, an HVAC company, a lawn service, and they haven't picked one yet.",
+      },
+    ],
+    pricing: "postcards",
+    ctaLabel: "Request a home services quote",
+    prefillBody:
+      "Home services mailing — [HVAC / plumbing / electrical / roofing / other]. Looking at [EDDM saturation / seasonal campaign / radius mailer] of roughly [QTY] pieces.",
+    stats: [
+      { label: "Common format", value: "Postcards · EDDM eligible" },
+      { label: "Best cadence", value: "Seasonal + recurring" },
+    ],
+  },
 ];
 
 export function getIndustry(slug: string): Industry | null {
