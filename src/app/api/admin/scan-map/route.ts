@@ -12,7 +12,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-// @ts-expect-error — zipcodes package has no bundled types
 import zipcodes from "zipcodes";
 
 export const runtime = "nodejs";

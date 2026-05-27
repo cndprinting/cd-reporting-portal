@@ -20,6 +20,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { verifyApiKey, requireScope } from "@/lib/services/api-keys";
 import { zipToState } from "@/lib/zip-geo";
+import zipcodes from "zipcodes";
 
 export const runtime = "nodejs";
 
@@ -117,16 +118,50 @@ export async function GET(
     select: { imbRoutingZip: true, status: true },
   });
   const stateMap = new Map<string, { total: number; delivered: number }>();
+  // Per-ZIP rollup powers the zoom-to-location pins on the heat map.
+  const zipMap = new Map<string, { total: number; delivered: number }>();
   for (const p of geoPieces) {
+    const isDelivered = p.status === "DELIVERED" || p.status === "DELIVERED_INFERRED";
+
     const st = zipToState(p.imbRoutingZip);
-    if (!st) continue;
-    const entry = stateMap.get(st) ?? { total: 0, delivered: 0 };
-    entry.total += 1;
-    if (p.status === "DELIVERED" || p.status === "DELIVERED_INFERRED") entry.delivered += 1;
-    stateMap.set(st, entry);
+    if (st) {
+      const entry = stateMap.get(st) ?? { total: 0, delivered: 0 };
+      entry.total += 1;
+      if (isDelivered) entry.delivered += 1;
+      stateMap.set(st, entry);
+    }
+
+    const zip5 = (p.imbRoutingZip ?? "").replace(/\D/g, "").slice(0, 5);
+    if (zip5.length === 5) {
+      const entry = zipMap.get(zip5) ?? { total: 0, delivered: 0 };
+      entry.total += 1;
+      if (isDelivered) entry.delivered += 1;
+      zipMap.set(zip5, entry);
+    }
   }
   const perState = [...stateMap.entries()]
     .map(([state, v]) => ({ state, ...v }))
+    .sort((a, b) => b.total - a.total);
+
+  // Attach geographic centroids (lat/lng) so the client can plot ZIP pins.
+  // Resolved server-side to keep the full ZIP dataset out of the browser bundle.
+  const perZip = [...zipMap.entries()]
+    .map(([zip, v]) => {
+      const loc = zipcodes.lookup(zip);
+      if (!loc || typeof loc.latitude !== "number" || typeof loc.longitude !== "number") {
+        return null;
+      }
+      return {
+        zip,
+        city: loc.city ?? null,
+        state: loc.state ?? null,
+        lat: loc.latitude,
+        lng: loc.longitude,
+        total: v.total,
+        delivered: v.delivered,
+      };
+    })
+    .filter((z): z is NonNullable<typeof z> => z !== null)
     .sort((a, b) => b.total - a.total);
 
   // Resolve campaign names so the customer view doesn't show raw cuid strings
@@ -170,6 +205,7 @@ export async function GET(
     },
     statusCounts,
     perState,
+    perZip,
     perCampaign: [...campaignMap.values()],
     perMailerId: byMid.map((m) => ({ mid: m.imbMailerId, count: m._count })),
     batches,

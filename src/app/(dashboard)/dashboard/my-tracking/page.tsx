@@ -33,6 +33,15 @@ interface TrackingData {
   totals: { pieces: number; delivered: number; deliveryRate: number };
   statusCounts: Record<string, number>;
   perState: Array<{ state: string; total: number; delivered: number }>;
+  perZip?: Array<{
+    zip: string;
+    city: string | null;
+    state: string | null;
+    lat: number;
+    lng: number;
+    total: number;
+    delivered: number;
+  }>;
   perCampaign: Array<{
     campaignId: string;
     name: string;
@@ -163,11 +172,11 @@ export default function MyTrackingPage() {
               <CardTitle>Delivery Heat Map</CardTitle>
             </div>
             <p className="text-sm text-gray-500">
-              Where your mail landed, by state — derived from each piece&apos;s USPS routing code
+              Where your mail landed — scroll to zoom into exact ZIP locations
             </p>
           </CardHeader>
           <CardContent>
-            <UsStateHeatmap data={data.perState} />
+            <UsStateHeatmap data={data.perState} zips={data.perZip ?? []} />
           </CardContent>
         </Card>
       )}
