@@ -1009,22 +1009,21 @@ function FinalQuantityCard({
     setUploading(true);
     setErr(null);
     try {
-      const upRes = await fetch(
-        `/api/uploads?filename=${encodeURIComponent(file.name)}&kind=cleansed-list`,
-        { method: "POST", body: file },
-      );
-      const upData = await upRes.json();
-      if (!upRes.ok) throw new Error(upData.error ?? "Upload failed");
-      setCleansedUrl(upData.url);
+      // Client-side Blob upload (handles >4.5MB + binary .xls)
+      const { url } = await uploadFile(file);
+      setCleansedUrl(url);
       setCleansedName(file.name);
-      try {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-        const rowsNoHeader = Math.max(0, lines.length - 1);
-        setCleansedRows(rowsNoHeader);
-        if (!finalQty) setFinalQty(String(rowsNoHeader));
-      } catch {
-        /* non-CSV, skip row count */
+      // Row count only works for CSV; .xls is binary so skip cleanly
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        try {
+          const text = await file.text();
+          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          const rowsNoHeader = Math.max(0, lines.length - 1);
+          setCleansedRows(rowsNoHeader);
+          if (!finalQty) setFinalQty(String(rowsNoHeader));
+        } catch {
+          /* skip */
+        }
       }
     } catch (e) {
       setErr((e as Error).message);
