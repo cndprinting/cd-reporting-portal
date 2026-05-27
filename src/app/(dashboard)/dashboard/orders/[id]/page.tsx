@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { uploadFile } from "@/lib/upload-client";
 import {
   Package,
   FileCheck,
@@ -799,14 +800,10 @@ function ProofUploader({
     setUploading(true);
     setErr(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const up = await fetch("/api/uploads", { method: "POST", body: fd });
-      const upData = await up.json();
-      if (!up.ok) throw new Error(upData.error ?? "Upload failed");
-      await submitUrl(upData.url);
+      const { url } = await uploadFile(file);
+      await submitUrl(url);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr((e as Error).message || "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -917,17 +914,13 @@ function MailingListUploader({
     setUploading(true);
     setErr(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const up = await fetch("/api/uploads", { method: "POST", body: fd });
-      const upData = await up.json();
-      if (!up.ok) throw new Error(upData.error ?? "Upload failed");
+      const { url } = await uploadFile(file);
 
       const patch = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mailingListUrl: upData.url,
+          mailingListUrl: url,
           mailingListFileName: file.name,
         }),
       });
@@ -1323,11 +1316,13 @@ function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode:
     setErr(null);
     setResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
+      // Upload to Blob first (handles 50MB Presort ZIPs — bypasses the
+      // 4.5MB serverless body limit), then hand the server the blob URL.
+      const { url } = await uploadFile(file);
       const r = await fetch(`/api/orders/${orderId}/ingest-maildat`, {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: url, fileName: file.name }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -1335,6 +1330,8 @@ function MailDatUploadCard({ orderId, orderCode }: { orderId: string; orderCode:
         return;
       }
       setResult(d);
+    } catch (e) {
+      setErr((e as Error).message || "Upload failed");
     } finally {
       setUploading(false);
     }

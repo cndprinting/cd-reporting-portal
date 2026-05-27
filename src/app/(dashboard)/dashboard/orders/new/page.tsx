@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DropZone } from "@/components/ui/dropzone";
 import { getEnabledModules, type ModuleManifest } from "@/modules/registry";
+import { uploadFile } from "@/lib/upload-client";
 
 interface Campaign {
   id: string;
@@ -243,14 +244,10 @@ export default function NewOrderPage() {
     setCustomDesignFileName(file.name);
     setCustomDesignUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const up = await fetch("/api/uploads", { method: "POST", body: fd });
-      const upData = await up.json();
-      if (up.ok) setCustomDesignUrl(upData.url);
-      else setCustomDesignErr(upData.error ?? "Upload failed");
+      const { url } = await uploadFile(file);
+      setCustomDesignUrl(url);
     } catch (e) {
-      setCustomDesignErr((e as Error).message);
+      setCustomDesignErr((e as Error).message || "Upload failed");
     } finally {
       setCustomDesignUploading(false);
     }
@@ -268,16 +265,12 @@ export default function NewOrderPage() {
       setSheet(parsed);
       setMapping(autoMapColumns(parsed.headers));
 
-      // Upload to Vercel Blob in background
+      // Upload to Vercel Blob (client-side, direct — no 4.5MB function limit)
       setUploading(true);
-      const fd = new FormData();
-      fd.append("file", file);
-      const up = await fetch("/api/uploads", { method: "POST", body: fd });
-      const upData = await up.json();
-      if (up.ok) setFileUrl(upData.url);
-      else setParseErr(upData.error ?? "Upload failed");
+      const { url } = await uploadFile(file);
+      setFileUrl(url);
     } catch (e) {
-      setParseErr((e as Error).message);
+      setParseErr((e as Error).message || "Upload failed");
     } finally {
       setUploading(false);
     }

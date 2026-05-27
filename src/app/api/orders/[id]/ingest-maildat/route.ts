@@ -74,19 +74,45 @@ export async function POST(
   });
   if (!order) return NextResponse.json({ error: "order not found" }, { status: 404 });
 
-  // Grab file from multipart form
-  const formData = await req.formData().catch(() => null);
-  const file = formData?.get("file");
-  if (!file || typeof file === "string") {
-    return NextResponse.json({ error: "file field missing from form" }, { status: 400 });
+  // Two intake modes:
+  //   A. JSON { blobUrl, fileName } — file was uploaded to Vercel Blob
+  //      client-side first (bypasses the 4.5MB serverless body limit).
+  //      Preferred for big Presort ZIPs.
+  //   B. multipart form "file" — legacy small-file path.
+  let buffer: Buffer;
+  let fileName: string;
+  const contentType = req.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = await req.json().catch(() => null);
+    const blobUrl: string | undefined = body?.blobUrl;
+    fileName = body?.fileName ?? "upload.zip";
+    if (!blobUrl) {
+      return NextResponse.json({ error: "blobUrl required" }, { status: 400 });
+    }
+    const resp = await fetch(blobUrl);
+    if (!resp.ok) {
+      return NextResponse.json(
+        { error: `Could not fetch uploaded file from storage (${resp.status})` },
+        { status: 400 },
+      );
+    }
+    buffer = Buffer.from(await resp.arrayBuffer());
+  } else {
+    const formData = await req.formData().catch(() => null);
+    const file = formData?.get("file");
+    if (!file || typeof file === "string") {
+      return NextResponse.json({ error: "file field missing from form" }, { status: 400 });
+    }
+    const fileObj = file as File;
+    fileName = fileObj.name;
+    buffer = Buffer.from(await fileObj.arrayBuffer());
   }
-  const fileObj = file as File;
-  const buffer = Buffer.from(await fileObj.arrayBuffer());
 
   let pbcText: string;
   let foundAs: string;
   try {
-    const result = await extractPbcText(buffer, fileObj.name);
+    const result = await extractPbcText(buffer, fileName);
     pbcText = result.text;
     foundAs = result.foundAs;
   } catch (e) {

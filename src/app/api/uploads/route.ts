@@ -1,64 +1,71 @@
 /**
- * File upload endpoint (Vercel Blob backed).
- * POST /api/uploads
- *   - multipart/form-data with field "file"
- *   - returns { url, pathname, size }
+ * File upload — Vercel Blob CLIENT upload token endpoint.
  *
- * Admin-only. Used for merge proof PDF uploads, design assets, etc.
- * Requires BLOB_READ_WRITE_TOKEN env (auto-provided when Vercel Blob
- * is enabled on the project).
+ * IMPORTANT: files now stream browser → Blob storage directly, bypassing
+ * the serverless function. This is required because Vercel serverless
+ * functions cap request bodies at ~4.5MB — print-ready PDFs and large
+ * recipient lists exceed that and were failing with "Request Entity Too
+ * Large" (which surfaced to the client as "Unexpected token 'R'... not
+ * valid JSON").
+ *
+ * This route no longer receives the file. It only:
+ *   1. Verifies the user is logged in
+ *   2. Issues a short-lived signed upload token (via handleUpload)
+ *   3. Constrains content types + max size
+ *
+ * Client uses upload() from @vercel/blob/client with handleUploadUrl: "/api/uploads".
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
-  // Any logged-in user can upload — customers need this for self-service order flow
-  // (they upload their own recipient list). Admins upload proofs + lists for customers.
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
-      {
-        error:
-          "Vercel Blob not enabled on this project. Enable it at https://vercel.com/benjy-waxmans-projects/cd-reporting-portal/stores",
-      },
+      { error: "Vercel Blob not enabled. Add a Blob store in Vercel → Storage." },
       { status: 503 },
     );
   }
 
-  const form = await req.formData();
-  const file = form.get("file");
-  if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "file field required" }, { status: 400 });
+  const body = (await req.json()) as HandleUploadBody;
+
+  try {
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async () => {
+        // Session already verified above. Constrain what can be uploaded.
+        return {
+          allowedContentTypes: [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "text/csv",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/plain",
+            "application/zip",
+            "application/octet-stream",
+          ],
+          maximumSizeInBytes: 50 * 1024 * 1024, // 50MB — covers print PDFs + big lists
+          tokenPayload: JSON.stringify({ userId: session.id }),
+        };
+      },
+      onUploadCompleted: async () => {
+        // No-op — the client receives the blob URL directly and PATCHes it
+        // onto the order. Hook here later if we want server-side processing.
+      },
+    });
+    return NextResponse.json(jsonResponse);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
-
-  // Max 20MB to protect serverless limits
-  if (file.size > 20 * 1024 * 1024) {
-    return NextResponse.json({ error: "file too large (max 20MB)" }, { status: 413 });
-  }
-
-  const timestamp = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const pathname = `uploads/${session.id}/${timestamp}-${safeName}`;
-
-  const blob = await put(pathname, file, {
-    access: "public",
-    contentType: file.type || undefined,
-    addRandomSuffix: false,
-  });
-
-  return NextResponse.json({
-    url: blob.url,
-    pathname: blob.pathname,
-    size: file.size,
-    contentType: file.type,
-  });
 }
