@@ -15,6 +15,7 @@ const UsStateHeatmap = dynamic(
   () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
   { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-gray-400">Loading map…</div> },
 );
+import { TopZipsBar } from "@/components/tracking/top-zips-bar";
 import {
   LineChart,
   Line,
@@ -177,6 +178,18 @@ export default function MyTrackingPage() {
           </CardHeader>
           <CardContent>
             <UsStateHeatmap data={data.perState} zips={data.perZip ?? []} />
+          </CardContent>
+        </Card>
+      )}
+
+      {data.perZip && data.perZip.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Top ZIP Codes by Volume</CardTitle>
+            <p className="text-sm text-gray-500">Your busiest ZIPs and how they&apos;re delivering</p>
+          </CardHeader>
+          <CardContent>
+            <TopZipsBar zips={data.perZip} />
           </CardContent>
         </Card>
       )}
