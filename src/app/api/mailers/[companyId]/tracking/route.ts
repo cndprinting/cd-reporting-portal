@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { verifyApiKey, requireScope } from "@/lib/services/api-keys";
+import { zipToState } from "@/lib/zip-geo";
 
 export const runtime = "nodejs";
 
@@ -107,6 +108,27 @@ export async function GET(
   const delivered =
     (statusCounts.DELIVERED ?? 0) + (statusCounts.DELIVERED_INFERRED ?? 0);
 
+  // Per-state delivery rollup for the heat map. Recipient addresses aren't stored
+  // on every piece, but the IMb routing code embeds the destination ZIP, so we
+  // derive the delivery state from the barcode. Aggregate in JS to keep the
+  // dynamic filters (mid/campaign/batch/expired) consistent with pieceWhere.
+  const geoPieces = await prisma.mailPiece.findMany({
+    where: pieceWhere,
+    select: { imbRoutingZip: true, status: true },
+  });
+  const stateMap = new Map<string, { total: number; delivered: number }>();
+  for (const p of geoPieces) {
+    const st = zipToState(p.imbRoutingZip);
+    if (!st) continue;
+    const entry = stateMap.get(st) ?? { total: 0, delivered: 0 };
+    entry.total += 1;
+    if (p.status === "DELIVERED" || p.status === "DELIVERED_INFERRED") entry.delivered += 1;
+    stateMap.set(st, entry);
+  }
+  const perState = [...stateMap.entries()]
+    .map(([state, v]) => ({ state, ...v }))
+    .sort((a, b) => b.total - a.total);
+
   // Resolve campaign names so the customer view doesn't show raw cuid strings
   const campaignIds = [...new Set(byCampaign.map((r) => r.campaignId))];
   const campaignRows = campaignIds.length
@@ -147,6 +169,7 @@ export async function GET(
       deliveryRate: pieces ? delivered / pieces : 0,
     },
     statusCounts,
+    perState,
     perCampaign: [...campaignMap.values()],
     perMailerId: byMid.map((m) => ({ mid: m.imbMailerId, count: m._count })),
     batches,

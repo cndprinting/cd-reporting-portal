@@ -28,7 +28,7 @@
  */
 import { config } from "dotenv";
 config();
-import { PrismaClient } from "../src/generated/prisma";
+import { PrismaClient, type MailPieceStatus } from "../src/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import { mapOperationCode } from "../src/lib/services/imb";
@@ -117,7 +117,9 @@ async function main() {
   for (const r of matches) {
     const inferred = inferStatus(r.occurrences, r.firstSeenAt, r.lastSeenAt);
     // Upgrade-only: never downgrade a piece that already has a better/real status.
-    const finalStatus = RANK[inferred] > RANK[r.pieceStatus] ? inferred : r.pieceStatus;
+    const finalStatus = (RANK[inferred] > RANK[r.pieceStatus]
+      ? inferred
+      : r.pieceStatus) as MailPieceStatus;
     const isUpgrade = RANK[inferred] > RANK[r.pieceStatus];
     if (isUpgrade) statusTally[inferred] = (statusTally[inferred] ?? 0) + 1;
     else skippedNoUpgrade++;

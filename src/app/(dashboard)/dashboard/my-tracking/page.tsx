@@ -7,7 +7,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { Mail, CheckCircle2, Truck, Home, AlertTriangle } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Mail, CheckCircle2, Truck, Home, AlertTriangle, MapPin } from "lucide-react";
+
+// Lazy-load the choropleth (ships ~40KB gzipped of us-atlas geometry + d3-geo).
+const UsStateHeatmap = dynamic(
+  () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
+  { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-gray-400">Loading map…</div> },
+);
 import {
   LineChart,
   Line,
@@ -25,6 +32,7 @@ interface TrackingData {
   companyId: string;
   totals: { pieces: number; delivered: number; deliveryRate: number };
   statusCounts: Record<string, number>;
+  perState: Array<{ state: string; total: number; delivered: number }>;
   perCampaign: Array<{
     campaignId: string;
     name: string;
@@ -143,6 +151,23 @@ export default function MyTrackingPage() {
                 Contact your C&amp;D account manager for an address cleanup report.
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {data.perState && data.perState.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-brand-600" />
+              <CardTitle>Delivery Heat Map</CardTitle>
+            </div>
+            <p className="text-sm text-gray-500">
+              Where your mail landed, by state — derived from each piece&apos;s USPS routing code
+            </p>
+          </CardHeader>
+          <CardContent>
+            <UsStateHeatmap data={data.perState} />
           </CardContent>
         </Card>
       )}
