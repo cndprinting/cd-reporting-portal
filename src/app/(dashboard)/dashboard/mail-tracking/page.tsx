@@ -12,7 +12,13 @@
  */
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Mail, CheckCircle2, MapPin, Clock } from "lucide-react";
+
+const UsStateHeatmap = dynamic(
+  () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
+  { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-stone">Loading map…</div> },
+);
 import {
   BarChart,
   Bar,
@@ -78,6 +84,16 @@ interface OverviewData {
   deliveryRate: number;
   avgDaysToDeliver: number;
   deliveryCurve: { date: string; delivered: number }[];
+  perState?: { state: string; total: number; delivered: number }[];
+  perZip?: {
+    zip: string;
+    city: string | null;
+    state: string | null;
+    lat: number;
+    lng: number;
+    total: number;
+    delivered: number;
+  }[];
   operationBreakdown: { operation: string; count: number }[];
   perCustomer: CustomerRollup[];
   recentScans: RecentScan[];
@@ -321,6 +337,21 @@ export default function MailTrackingPage() {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Delivery heat map */}
+      {data.perState && data.perState.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Delivery Heat Map · {scopeLabel}</CardTitle>
+            <p className="text-xs text-stone">
+              Where mail landed — scroll to zoom into exact ZIP locations. Derived from each piece&apos;s USPS routing code.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <UsStateHeatmap data={data.perState} zips={data.perZip ?? []} />
           </CardContent>
         </Card>
       )}

@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { zipToState } from "@/lib/zip-geo";
+import zipcodes from "zipcodes";
 
 export const runtime = "nodejs";
 
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
       prisma.mailPiece.findMany({
         where,
-        select: { id: true, status: true, daysToDeliver: true },
+        select: { id: true, status: true, daysToDeliver: true, imbRoutingZip: true },
         take: 100000,
       }),
       prisma.mailPiece.count({ where }),
@@ -183,6 +185,47 @@ export async function GET(req: NextRequest) {
     },
   });
 
+  // Per-state + per-ZIP rollups for the delivery heat map (same derivation as
+  // the customer tracking view: state/ZIP come from the IMb routing code).
+  const stateMap = new Map<string, { total: number; delivered: number }>();
+  const zipMap = new Map<string, { total: number; delivered: number }>();
+  for (const p of pieces) {
+    const isDelivered = p.status === "DELIVERED" || p.status === "DELIVERED_INFERRED";
+    const st = zipToState(p.imbRoutingZip);
+    if (st) {
+      const e = stateMap.get(st) ?? { total: 0, delivered: 0 };
+      e.total += 1;
+      if (isDelivered) e.delivered += 1;
+      stateMap.set(st, e);
+    }
+    const zip5 = (p.imbRoutingZip ?? "").replace(/\D/g, "").slice(0, 5);
+    if (zip5.length === 5) {
+      const e = zipMap.get(zip5) ?? { total: 0, delivered: 0 };
+      e.total += 1;
+      if (isDelivered) e.delivered += 1;
+      zipMap.set(zip5, e);
+    }
+  }
+  const perState = [...stateMap.entries()]
+    .map(([state, v]) => ({ state, ...v }))
+    .sort((a, b) => b.total - a.total);
+  const perZip = [...zipMap.entries()]
+    .map(([zip, v]) => {
+      const loc = zipcodes.lookup(zip);
+      if (!loc || typeof loc.latitude !== "number" || typeof loc.longitude !== "number") return null;
+      return {
+        zip,
+        city: loc.city ?? null,
+        state: loc.state ?? null,
+        lat: loc.latitude,
+        lng: loc.longitude,
+        total: v.total,
+        delivered: v.delivered,
+      };
+    })
+    .filter((z): z is NonNullable<typeof z> => z !== null)
+    .sort((a, b) => b.total - a.total);
+
   const statusCounts: Record<string, number> = {};
   for (const g of statusGroups) statusCounts[g.status] = g._count;
 
@@ -209,6 +252,8 @@ export async function GET(req: NextRequest) {
     archivedCount,
     scanCount,
     statusCounts,
+    perState,
+    perZip,
     deliveryRate: totalPieceCount ? delivered / totalPieceCount : 0,
     avgDaysToDeliver,
     deliveryCurve: deliveryDaily.map((d) => ({
