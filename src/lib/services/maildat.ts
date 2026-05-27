@@ -15,6 +15,7 @@
 
 import type { IVScanRecord } from "./iv-mtr-ingest";
 import { parseIMb, extractCleanIMb } from "./imb";
+import { USPS_ALL_MIDS } from "../usps-config";
 
 export interface ParsedMailDatPiece {
   imb: string;
@@ -57,7 +58,10 @@ export function parsePBC(content: string): { jobId: string; pieceId: string; imb
     // filler chars. extractCleanIMb() validates DMM 708 structural rules and
     // auto-trims off-by-one garbage to recover the real IMb.
     const rawWindow = line.slice(30, 62).replace(/[^0-9]/g, "");
-    const cleanImb = extractCleanIMb(rawWindow);
+    // MID-aware clean: prefer the trim that yields C&D's registered MID,
+    // which disambiguates an extra leading digit (BC=10/MID=190105 wrong
+    // vs BC=00/MID=901052658 right).
+    const cleanImb = extractCleanIMb(rawWindow, USPS_ALL_MIDS);
     if (!cleanImb) continue;
     out.push({
       jobId: line.slice(0, 8).trim(),

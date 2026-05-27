@@ -74,13 +74,19 @@ export function parseIMbStrict(imb: string): ParsedIMb | null {
  * looked structurally valid (31 digits) but had bogus BC values like "83",
  * "91" that violate DMM 708's 0-4-per-digit rule.
  */
-export function extractCleanIMb(raw: string): string | null {
+export function extractCleanIMb(
+  raw: string,
+  expectedMid?: string | string[],
+): string | null {
   const digits = raw.replace(/\D/g, "");
   if (digits.length < 20) return null;
+  const expectedMids = expectedMid
+    ? Array.isArray(expectedMid)
+      ? expectedMid
+      : [expectedMid]
+    : [];
 
-  // Try every viable substring length and offset, prefer the longest valid one.
-  // Candidates cover: as-is, drop-1-front, drop-1-back, drop-1-each, drop-2-front,
-  // drop-2-back, drop-1-front-2-back, drop-2-front-1-back, drop-2-each.
+  // Build every viable substring (drop 0-2 chars off each end).
   const candidates: string[] = [];
   for (let lead = 0; lead <= 2; lead++) {
     for (let trail = 0; trail <= 2; trail++) {
@@ -88,8 +94,22 @@ export function extractCleanIMb(raw: string): string | null {
       if ([20, 25, 29, 31].includes(sliced.length)) candidates.push(sliced);
     }
   }
-  // Prefer longest valid IMb (more routing data = better matching)
-  candidates.sort((a, b) => b.length - a.length);
+  candidates.sort((a, b) => b.length - a.length); // longest first
+
+  // PASS 1 (MID-aware): if we know the expected MID, prefer the candidate
+  // whose parsed MID matches it. This resolves the BC=10-vs-BC=00 ambiguity:
+  // "100271901052658…" parses structurally fine as BC=10/MID=190105, but the
+  // REAL piece is "00271901052658…" (BC=00/MID=901052658). Only the MID match
+  // tells them apart. Without this, an extra leading digit silently produces
+  // a wrong-MID IMb that USPS scans will never match.
+  if (expectedMids.length > 0) {
+    for (const c of candidates) {
+      const parsed = parseIMbStrict(c);
+      if (parsed && expectedMids.includes(parsed.mailerId)) return c;
+    }
+  }
+
+  // PASS 2 (structural only): fall back to longest structurally-valid IMb.
   for (const c of candidates) {
     if (parseIMbStrict(c)) return c;
   }

@@ -27,7 +27,7 @@
 
 import prisma from "@/lib/prisma";
 import { mapOperationCode, parseIMb } from "./imb";
-import { USPS_MID } from "../usps-config";
+import { USPS_MID, USPS_ALL_MIDS } from "../usps-config";
 
 export interface IVScanRecord {
   imb: string;
@@ -556,10 +556,11 @@ export async function importMailFile(params: {
   }
 
   // Pre-flight validation: enforce structurally-valid IMbs (DMM 708) and
-  // optionally require a specific MID. Bad rows are rejected with a reason
-  // surfaced in the SharepointImport audit log so admins see exactly what
-  // went wrong instead of silently storing corrupt IMbs.
-  const expectedMid = params.expectedMid ?? USPS_MID;
+  // require the MID to be one of C&D's registered MIDs. Bad rows are
+  // rejected with a reason surfaced in the SharepointImport audit log.
+  const expectedMids = params.expectedMid
+    ? [params.expectedMid]
+    : USPS_ALL_MIDS;
 
   let inserted = 0;
   let skipped = 0;
@@ -614,12 +615,12 @@ export async function importMailFile(params: {
       continue;
     }
 
-    // MID guard: if expectedMid is configured, every row's MID must match
-    if (expectedMid && parsed.mailerId !== expectedMid) {
+    // MID guard: every row's MID must be one of C&D's registered MIDs
+    if (expectedMids.length > 0 && !expectedMids.includes(parsed.mailerId)) {
       recordFailure(
         i,
         rawDigits,
-        `MID '${parsed.mailerId}' doesn't match expected '${expectedMid}'`,
+        `MID '${parsed.mailerId}' doesn't match expected '${expectedMids.join(", ")}'`,
       );
       skipped++;
       continue;
