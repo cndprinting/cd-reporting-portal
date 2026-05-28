@@ -152,7 +152,15 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
-        style={{ touchAction: "none", cursor: zoomed ? "grab" : "default", background: "#f8fafc", borderRadius: 8 }}
+        style={{
+          touchAction: "none",
+          cursor: zoomed ? "grab" : "default",
+          background: "#f8fafc",
+          borderRadius: 8,
+          maxWidth: "85%",
+          display: "block",
+          marginInline: "auto",
+        }}
       >
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {features.map((f, i) => {
