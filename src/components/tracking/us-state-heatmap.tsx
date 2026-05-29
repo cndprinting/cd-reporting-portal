@@ -106,12 +106,14 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
         scrollWheelZoom
         style={{ height: 460, width: "100%", maxWidth: "85%", marginInline: "auto", borderRadius: 8 }}
         worldCopyJump
+        attributionControl={false}
       >
         <LayersControl position="topright">
+          {/* Tile attribution is rendered as our own footer below the map so the
+              links can target="_blank" and not navigate the user off MailerCity. */}
           <LayersControl.BaseLayer checked name="Heat Map">
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
               subdomains="abcd"
               maxZoom={20}
             />
@@ -119,14 +121,12 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
           <LayersControl.BaseLayer name="Streets">
             <TileLayer
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer name="Satellite">
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
@@ -158,6 +158,21 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#dc2626" }} /> &lt;50%
           </span>
         </span>
+      </div>
+      <div className="px-1 text-[10px] text-gray-400">
+        Map tiles ©{" "}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+          OpenStreetMap
+        </a>
+        ,{" "}
+        <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+          CARTO
+        </a>
+        ,{" "}
+        <a href="https://www.esri.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+          Esri
+        </a>
+        .
       </div>
     </div>
   );
