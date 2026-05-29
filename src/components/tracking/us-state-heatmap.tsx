@@ -12,7 +12,8 @@
  * Esri World Imagery. These ARE external requests — the trade-off for satellite.
  */
 
-import "leaflet/dist/leaflet.css";
+// Leaflet CSS is imported in src/app/globals.css so it loads before this
+// dynamically-imported component mounts (safer with Next code-splitting).
 import { useMemo } from "react";
 import { MapContainer, TileLayer, LayersControl, GeoJSON, CircleMarker, Tooltip } from "react-leaflet";
 import type { Layer, PathOptions } from "leaflet";
@@ -124,11 +125,11 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
           <LayersControl.Overlay checked name="State delivery rates">
             <GeoJSON data={statesGeo} style={styleState as never} onEachFeature={onEachState} />
           </LayersControl.Overlay>
-
-          <LayersControl.Overlay checked name="ZIP pins">
-            <ZipPinLayer zips={zips} maxZip={maxZip} />
-          </LayersControl.Overlay>
         </LayersControl>
+
+        {/* ZIP pins rendered directly so LayersControl.Overlay's single-layer
+            requirement doesn't trip on the many CircleMarkers. */}
+        <ZipPinLayer zips={zips} maxZip={maxZip} />
       </MapContainer>
 
       <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
