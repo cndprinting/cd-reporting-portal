@@ -66,16 +66,25 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
     ) as unknown as FeatureCollection<Geometry, { name: string }>;
   }, []);
 
+  // State shading = volume heat (where mail concentrates). Rate info lives on
+  // the per-ZIP pins, which have enough data per point to be meaningful. Rate-
+  // coloring states is misleading when small-sample states (3 pieces = 0% or
+  // 100%) get the same visual weight as high-volume ones.
+  const maxStateVolume = useMemo(
+    () => Math.max(1, ...data.map((d) => d.total)),
+    [data],
+  );
   function styleState(f?: Feature<Geometry, { name: string }>): PathOptions {
     if (!f) return {};
     const abbr = STATE_NAME_TO_ABBR[f.properties?.name ?? ""];
     const d = abbr ? byState.get(abbr) : undefined;
-    const rate = d && d.total ? d.delivered / d.total : 0;
-    const fillColor = d ? rateColor(rate) : "#e7edf3";
-    const fillOpacity = d
-      ? Math.max(0.3, Math.min(0.7, 0.3 + (d.total / (totalPieces || 1)) * 3))
-      : 0.35;
-    return { fillColor, fillOpacity, color: "#ffffff", weight: 1 };
+    if (!d || d.total === 0) {
+      return { fillColor: "#e7edf3", fillOpacity: 0.15, color: "#cbd5e1", weight: 0.5 };
+    }
+    // sqrt scale so mid-volume states are still visible alongside the top one.
+    const intensity = Math.sqrt(d.total / maxStateVolume);
+    const fillOpacity = 0.12 + intensity * 0.55; // ~0.12 to ~0.67
+    return { fillColor: "#0f766e", fillOpacity, color: "#ffffff", weight: 0.75 };
   }
 
   function onEachState(f: Feature<Geometry, { name: string }>, layer: Layer) {
@@ -132,16 +141,20 @@ export function UsStateHeatmap({ data, zips = [] }: Props) {
         <ZipPinLayer zips={zips} maxZip={maxZip} />
       </MapContainer>
 
-      <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 px-1">
         <span>Scroll to zoom · drag to pan · top-right toggle = Heat / Streets / Satellite</span>
         <span className="ml-auto flex items-center gap-3">
           <span className="flex items-center gap-1">
+            States: <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#0f766e", opacity: 0.2 }} />
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#0f766e", opacity: 0.45 }} />
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#0f766e", opacity: 0.7 }} />
+            volume
+          </span>
+          <span>·</span>
+          <span className="flex items-center gap-1">
+            ZIP pins:
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#059669" }} /> ≥90%
-          </span>
-          <span className="flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#d97706" }} /> 50–90%
-          </span>
-          <span className="flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#dc2626" }} /> &lt;50%
           </span>
         </span>
