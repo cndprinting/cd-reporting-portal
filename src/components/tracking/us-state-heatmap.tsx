@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * US state choropleth + ZIP-level pins for mail delivery, with zoom & pan.
+ * Delivery heat map — Leaflet-based.
  *
- * - Base layer: inline SVG US map (us-atlas TopoJSON), states shaded by
- *   delivery rate. No external map tiles — privacy-safe, no runtime network.
- * - Pin layer: one dot per ZIP that received mail, projected with the same
- *   Albers-USA projection, sized by volume and colored by delivery rate.
- * - Scroll to zoom, drag to pan. Pins shrink with zoom so detail stays legible
- *   when Aaron zooms into a county/metro.
+ * Three base layers (Heat Map / Streets / Satellite) plus a toggleable state
+ * choropleth overlay and one CircleMarker per ZIP with mail. Leaflet handles
+ * zoom + pan natively (smooth, no page-scroll bleed), which is why we use it
+ * over the previous custom SVG implementation.
+ *
+ * Tile providers (free, attribution included): CartoDB Positron, OpenStreetMap,
+ * Esri World Imagery. These ARE external requests — the trade-off for satellite.
  */
 
-import { useMemo, useRef, useState } from "react";
-import { geoAlbersUsa, geoPath } from "d3-geo";
+import "leaflet/dist/leaflet.css";
+import { useMemo } from "react";
+import { MapContainer, TileLayer, LayersControl, GeoJSON, CircleMarker, Tooltip } from "react-leaflet";
+import type { Layer, PathOptions } from "leaflet";
 import { feature } from "topojson-client";
-import type { FeatureCollection, Geometry } from "geojson";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 import usStatesTopo from "us-atlas/states-10m.json";
 import { STATE_NAME_TO_ABBR } from "@/lib/zip-geo";
 
@@ -44,211 +47,136 @@ function rateColor(rate: number): string {
   return "#dc2626";
 }
 
-const WIDTH = 760;
-const HEIGHT = 460;
-const MIN_SCALE = 1;
-const MAX_SCALE = 14;
-
 export function UsStateHeatmap({ data, zips = [] }: Props) {
-  const [hover, setHover] = useState<{ x: number; y: number; label: string } | null>(null);
-  // View transform: scale + translate (in SVG user units).
-  const [view, setView] = useState({ k: 1, x: 0, y: 0 });
-  const drag = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-
   const byState = useMemo(() => {
     const m = new Map<string, StateDatum>();
     for (const d of data) m.set(d.state, d);
     return m;
   }, [data]);
 
-  const { features, pathFor, projection } = useMemo(() => {
-    const fc = feature(
+  const totalPieces = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
+  const maxZip = useMemo(() => Math.max(1, ...zips.map((z) => z.total)), [zips]);
+
+  // Convert us-atlas TopoJSON to GeoJSON once.
+  const statesGeo = useMemo(() => {
+    return feature(
       usStatesTopo as unknown as Parameters<typeof feature>[0],
       (usStatesTopo as unknown as { objects: { states: unknown } }).objects.states as never,
     ) as unknown as FeatureCollection<Geometry, { name: string }>;
-    const projection = geoAlbersUsa().fitSize([WIDTH, HEIGHT], fc);
-    return { features: fc.features, pathFor: geoPath(projection), projection };
   }, []);
 
-  const totalPieces = data.reduce((s, d) => s + d.total, 0);
-  const maxZip = Math.max(1, ...zips.map((z) => z.total));
-
-  // Project ZIP centroids once.
-  const pins = useMemo(() => {
-    return zips
-      .map((z) => {
-        const p = projection([z.lng, z.lat]);
-        if (!p) return null;
-        return { ...z, px: p[0], py: p[1] };
-      })
-      .filter((z): z is NonNullable<typeof z> => z !== null);
-  }, [zips, projection]);
-
-  // Convert a client point to SVG user coords (pre-transform).
-  function toSvg(clientX: number, clientY: number) {
-    const rect = svgRef.current!.getBoundingClientRect();
-    const sx = (clientX - rect.left) * (WIDTH / rect.width);
-    const sy = (clientY - rect.top) * (HEIGHT / rect.height);
-    return { sx, sy };
+  function styleState(f?: Feature<Geometry, { name: string }>): PathOptions {
+    if (!f) return {};
+    const abbr = STATE_NAME_TO_ABBR[f.properties?.name ?? ""];
+    const d = abbr ? byState.get(abbr) : undefined;
+    const rate = d && d.total ? d.delivered / d.total : 0;
+    const fillColor = d ? rateColor(rate) : "#e7edf3";
+    const fillOpacity = d
+      ? Math.max(0.3, Math.min(0.7, 0.3 + (d.total / (totalPieces || 1)) * 3))
+      : 0.35;
+    return { fillColor, fillOpacity, color: "#ffffff", weight: 1 };
   }
 
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    const { sx, sy } = toSvg(e.clientX, e.clientY);
-    const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
-    setView((v) => {
-      const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k * factor));
-      const realFactor = k / v.k;
-      // Zoom toward the cursor: keep the point under the cursor fixed.
-      const x = sx - (sx - v.x) * realFactor;
-      const y = sy - (sy - v.y) * realFactor;
-      return k === MIN_SCALE ? { k: 1, x: 0, y: 0 } : { k, x, y };
-    });
+  function onEachState(f: Feature<Geometry, { name: string }>, layer: Layer) {
+    const abbr = STATE_NAME_TO_ABBR[f.properties?.name ?? ""];
+    const d = abbr ? byState.get(abbr) : undefined;
+    const label = d
+      ? `<strong>${f.properties?.name}</strong><br/>${d.total.toLocaleString()} pieces · ${Math.round((d.delivered / d.total) * 100)}% delivered`
+      : `<strong>${f.properties?.name}</strong><br/>No pieces`;
+    layer.bindTooltip(label, { sticky: true, direction: "auto" });
   }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (view.k <= 1) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    drag.current = { startX: e.clientX, startY: e.clientY, ox: view.x, oy: view.y };
-  }
-  function onPointerMove(e: React.PointerEvent) {
-    if (!drag.current) return;
-    const rect = svgRef.current!.getBoundingClientRect();
-    const dx = (e.clientX - drag.current.startX) * (WIDTH / rect.width);
-    const dy = (e.clientY - drag.current.startY) * (HEIGHT / rect.height);
-    setView((v) => ({ ...v, x: drag.current!.ox + dx, y: drag.current!.oy + dy }));
-  }
-  function onPointerUp() {
-    drag.current = null;
-  }
-
-  const zoomed = view.k > 1;
-  const pinR = (t: number) => (3 + (t / maxZip) * 9) / Math.sqrt(view.k);
 
   return (
-    <div className="relative">
-      <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
-        <span>Scroll to zoom · drag to pan · hover a pin for ZIP detail</span>
-        {zoomed && (
-          <button
-            onClick={() => setView({ k: 1, x: 0, y: 0 })}
-            className="rounded border border-gray-300 px-2 py-0.5 text-gray-600 hover:bg-gray-50"
-          >
-            Reset view
-          </button>
-        )}
-      </div>
-
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        width="100%"
-        height="auto"
-        role="img"
-        aria-label="US map of mail delivery by state and ZIP"
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
-        style={{
-          touchAction: "none",
-          cursor: zoomed ? "grab" : "default",
-          background: "#f8fafc",
-          borderRadius: 8,
-          maxWidth: "85%",
-          display: "block",
-          marginInline: "auto",
-        }}
+    <div className="space-y-2">
+      <MapContainer
+        center={[39.5, -98]}
+        zoom={4}
+        minZoom={3}
+        maxZoom={16}
+        scrollWheelZoom
+        style={{ height: 460, width: "100%", maxWidth: "85%", marginInline: "auto", borderRadius: 8 }}
+        worldCopyJump
       >
-        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {features.map((f, i) => {
-            const abbr = STATE_NAME_TO_ABBR[f.properties?.name ?? ""];
-            const datum = abbr ? byState.get(abbr) : undefined;
-            const rate = datum && datum.total ? datum.delivered / datum.total : 0;
-            const fill = datum ? rateColor(rate) : "#e7edf3";
-            const opacity = datum
-              ? Math.max(0.3, Math.min(0.85, 0.3 + (datum.total / (totalPieces || 1)) * 3))
-              : 1;
-            return (
-              <path
-                key={i}
-                d={pathFor(f) ?? undefined}
-                fill={fill}
-                fillOpacity={opacity}
-                stroke="#ffffff"
-                strokeWidth={0.5 / view.k}
-                onMouseMove={(e) => {
-                  if (drag.current) return;
-                  const { sx, sy } = toSvg(e.clientX, e.clientY);
-                  const label = datum
-                    ? `${f.properties?.name}: ${datum.total.toLocaleString()} pieces · ${Math.round(rate * 100)}% delivered`
-                    : `${f.properties?.name}: no pieces`;
-                  setHover({ x: sx, y: sy, label });
-                }}
-                onMouseLeave={() => setHover(null)}
-              />
-            );
-          })}
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Heat Map">
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              subdomains="abcd"
+              maxZoom={20}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Streets">
+            <TileLayer
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Satellite">
+            <TileLayer
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
 
-          {/* ZIP pins */}
-          {pins.map((z) => {
-            const rate = z.total ? z.delivered / z.total : 0;
-            return (
-              <circle
-                key={z.zip}
-                cx={z.px}
-                cy={z.py}
-                r={pinR(z.total)}
-                fill={rateColor(rate)}
-                fillOpacity={0.8}
-                stroke="#ffffff"
-                strokeWidth={0.6 / view.k}
-                onMouseMove={(e) => {
-                  if (drag.current) return;
-                  const { sx, sy } = toSvg(e.clientX, e.clientY);
-                  setHover({
-                    x: sx,
-                    y: sy,
-                    label: `${z.zip}${z.city ? ` · ${z.city}, ${z.state}` : ""} — ${z.total.toLocaleString()} pieces · ${Math.round(rate * 100)}% delivered`,
-                  });
-                }}
-                onMouseLeave={() => setHover(null)}
-                style={{ cursor: "pointer" }}
-              />
-            );
-          })}
-        </g>
-      </svg>
+          <LayersControl.Overlay checked name="State delivery rates">
+            <GeoJSON data={statesGeo} style={styleState as never} onEachFeature={onEachState} />
+          </LayersControl.Overlay>
 
-      {hover && (
-        <div
-          className="pointer-events-none absolute z-10 rounded-md bg-slate-900 px-2.5 py-1.5 text-xs text-white shadow-lg"
-          style={{
-            left: `${(hover.x / WIDTH) * 100}%`,
-            top: `${(hover.y / HEIGHT) * 100}%`,
-            transform: "translate(12px, 12px)",
-            maxWidth: 260,
-          }}
-        >
-          {hover.label}
-        </div>
-      )}
+          <LayersControl.Overlay checked name="ZIP pins">
+            <ZipPinLayer zips={zips} maxZip={maxZip} />
+          </LayersControl.Overlay>
+        </LayersControl>
+      </MapContainer>
 
-      <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
-        <span>Delivery rate:</span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#059669" }} /> ≥90%
+      <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
+        <span>Scroll to zoom · drag to pan · top-right toggle = Heat / Streets / Satellite</span>
+        <span className="ml-auto flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#059669" }} /> ≥90%
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#d97706" }} /> 50–90%
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#dc2626" }} /> &lt;50%
+          </span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#d97706" }} /> 50–90%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#dc2626" }} /> &lt;50%
-        </span>
-        <span className="ml-auto text-gray-400">Dot size = ZIP volume</span>
       </div>
     </div>
+  );
+}
+
+function ZipPinLayer({ zips, maxZip }: { zips: ZipDatum[]; maxZip: number }) {
+  return (
+    <>
+      {zips.map((z) => {
+        const rate = z.total ? z.delivered / z.total : 0;
+        const color = rateColor(rate);
+        const r = 3 + (z.total / maxZip) * 10;
+        return (
+          <CircleMarker
+            key={z.zip}
+            center={[z.lat, z.lng]}
+            radius={r}
+            pathOptions={{ color: "#ffffff", weight: 0.6, fillColor: color, fillOpacity: 0.85 }}
+          >
+            <Tooltip direction="top" offset={[0, -2]}>
+              <div className="text-xs">
+                <div className="font-semibold">
+                  {z.zip}
+                  {z.city ? ` · ${z.city}, ${z.state}` : ""}
+                </div>
+                <div>
+                  {z.total.toLocaleString()} pieces · {Math.round(rate * 100)}% delivered
+                </div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        );
+      })}
+    </>
   );
 }
