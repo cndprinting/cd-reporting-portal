@@ -9,25 +9,16 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Mail, CheckCircle2, Truck, Home, AlertTriangle, MapPin } from "lucide-react";
+import { TopZipsBar } from "@/components/tracking/top-zips-bar";
+import { KPICard } from "@/components/dashboard/kpi-card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-// Lazy-load the choropleth (ships ~40KB gzipped of us-atlas geometry + d3-geo).
+// Lazy-load the Leaflet heat map — must be ssr:false because Leaflet touches window.
 const UsStateHeatmap = dynamic(
   () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
   { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-gray-400">Loading map…</div> },
 );
-import { TopZipsBar } from "@/components/tracking/top-zips-bar";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RTooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { KPICard } from "@/components/dashboard/kpi-card";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 interface TrackingData {
   companyId: string;

@@ -14,12 +14,6 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Mail, CheckCircle2, MapPin, Clock } from "lucide-react";
-
-const UsStateHeatmap = dynamic(
-  () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
-  { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-stone">Loading map…</div> },
-);
-import { TopZipsBar } from "@/components/tracking/top-zips-bar";
 import {
   BarChart,
   Bar,
@@ -29,10 +23,17 @@ import {
   Tooltip as RTooltip,
   ResponsiveContainer,
 } from "recharts";
+import { TopZipsBar } from "@/components/tracking/top-zips-bar";
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PieceDetailModal } from "@/components/mail-tracking/piece-detail-modal";
+
+// Lazy-load the Leaflet heat map — must be ssr:false because Leaflet touches window.
+const UsStateHeatmap = dynamic(
+  () => import("@/components/tracking/us-state-heatmap").then((m) => m.UsStateHeatmap),
+  { ssr: false, loading: () => <div className="h-80 flex items-center justify-center text-sm text-stone">Loading map…</div> },
+);
 
 interface PieceRow {
   id: string;
