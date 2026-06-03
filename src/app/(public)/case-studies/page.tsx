@@ -333,7 +333,7 @@ function PublicFooter() {
             </div>
             <ul className="space-y-2 text-sm text-paper/80">
               <li>12150 28th St N, St. Petersburg, FL 33716</li>
-              <li>727-572-9999</li>
+              <li><a href="tel:+17275729999" className="phone-link">727-572-9999</a></li>
               <li>
                 <a
                   href="https://cndprinting.com"

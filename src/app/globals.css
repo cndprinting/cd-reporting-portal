@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* Phone-number anchor styling: keep the look of plain text but tappable on
+   mobile and listenable by GTM's click trigger. Used in landing/industry/
+   footer/etc. — see the GTM-setup doc from the PPC team. */
+.phone-link {
+  color: inherit;
+  text-decoration: none;
+}
+.phone-link:hover {
+  text-decoration: underline;
+}
+
 @theme inline {
   /* MailerCity terracotta — replaces sky blue. Every existing
      bg-brand-/text-brand-/ring-brand- class now picks up these tones. */

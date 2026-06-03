@@ -9,7 +9,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { IndustriesDropdown } from "./industries-dropdown";
-import { trackLead } from "@/components/analytics/facebook-pixel";
+import { trackLead } from "@/lib/analytics";
 import { MobileCtaBar } from "./mobile-cta-bar";
 
 interface TierRow {
@@ -463,7 +463,7 @@ function GetStarted() {
               <div className="flex items-start gap-3">
                 <span className="text-brand-600 mt-0.5">📞</span>
                 <div>
-                  <div className="font-medium text-ink">727-572-9999</div>
+                  <div className="font-medium text-ink"><a href="tel:+17275729999" className="phone-link">727-572-9999</a></div>
                   <div className="text-xs text-stone">C&amp;D main line</div>
                 </div>
               </div>
@@ -616,7 +616,7 @@ function Footer() {
             </div>
             <ul className="space-y-2 text-sm text-paper/80">
               <li>12150 28th St N, St. Petersburg, FL 33716</li>
-              <li>727-572-9999</li>
+              <li><a href="tel:+17275729999" className="phone-link">727-572-9999</a></li>
               <li>
                 <a
                   href="https://cndprinting.com"

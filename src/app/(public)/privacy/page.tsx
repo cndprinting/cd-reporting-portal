@@ -183,7 +183,7 @@ export default function PrivacyPage() {
               <br />
               St. Petersburg, FL 33716
               <br />
-              727-572-9999
+              <a href="tel:+17275729999" className="phone-link">727-572-9999</a>
             </p>
           </Section>
         </div>
