@@ -40,9 +40,29 @@ export default function SignUpPage() {
     }
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "signup",
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          companyName: form.company || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "Could not create account. Please try again.");
+        setLoading(false);
+        return;
+      }
       router.push("/dashboard/overview");
-    }, 800);
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
