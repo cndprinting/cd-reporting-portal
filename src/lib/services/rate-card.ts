@@ -15,9 +15,15 @@
  * Source: CD_Direct_Rate_Card_2026.pdf (May 2026 rev)
  */
 
-export const RATE_CARD_VERSION = "2026-05-presummer";
-export const EFFECTIVE_DATE = "Pre-Summer Sale · ends May 31";
-export const RATE_CARD_EXPIRES = "May 31, 2026";
+// Single source of truth for the active rate-card promotion. Any page that
+// references the sale label or end date should import these — do NOT hardcode
+// dates in components.
+export const RATE_CARD_VERSION = "2026-06-summer";
+export const SALE_LABEL = "Summer Sale";                       // badge text
+export const SALE_END_SHORT = "ends Aug 31";                    // short suffix
+export const SALE_END_LONG = "August 31, 2026";                 // full date
+export const EFFECTIVE_DATE = `${SALE_LABEL} · ${SALE_END_SHORT}`;
+export const RATE_CARD_EXPIRES = SALE_END_LONG;
 export const POSTAGE_PER_UNIT = 0.43; // USPS Marketing/Standard Class
 
 export type PostcardSize = "4.25x6" | "6x8.5" | "6x11";

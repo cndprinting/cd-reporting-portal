@@ -21,6 +21,7 @@ import {
   lookupRate,
   POSTAGE_PER_UNIT,
   EFFECTIVE_DATE,
+  SALE_LABEL,
   type PieceFormat,
   type PieceSize,
 } from "@/lib/services/rate-card";
@@ -79,7 +80,7 @@ export function LandInvestorPricingCard({ quantity, value, onChange }: Props) {
       <CardHeader className="bg-emerald-50/50 border-b border-emerald-200">
         <CardTitle className="flex items-center gap-2 text-base">
           <DollarSign className="h-4 w-4 text-emerald-700" />
-          Pre-Summer Sale pricing
+          {SALE_LABEL} pricing
           <Badge variant="success" className="ml-2">
             {EFFECTIVE_DATE}
           </Badge>

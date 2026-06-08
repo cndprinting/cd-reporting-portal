@@ -7,6 +7,7 @@ import { IndustriesDropdown } from "./industries-dropdown";
 import { trackLead } from "@/lib/analytics";
 import { MobileCtaBar } from "./mobile-cta-bar";
 import { TemplateCard, type TemplateCardData } from "@/components/templates/template-card";
+import { SALE_LABEL, SALE_END_LONG } from "@/lib/services/rate-card";
 
 interface TierRow {
   minQty: number;
@@ -257,9 +258,9 @@ function RateCardPreview({
       <div className="max-w-6xl mx-auto px-6 py-16 lg:py-20">
         <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-brand-600 mb-4">
           <span className="bg-brand-100 text-brand-700 px-2 py-0.5 rounded">
-            Pre-Summer Sale
+            {SALE_LABEL}
           </span>
-          <span className="text-stone">Ends May 31, 2026</span>
+          <span className="text-stone">Ends {SALE_END_LONG}</span>
         </div>
         <h2 className="font-display text-3xl lg:text-4xl font-medium mb-2 max-w-2xl leading-tight">
           Standard pricing for {industry.pricing}.
@@ -267,7 +268,7 @@ function RateCardPreview({
         <p className="text-ink-soft mb-8 max-w-2xl">
           Per-piece printing. Standard Class postage{" "}
           <strong>${pricing.postage.toFixed(2)}/piece</strong> on top. Locked
-          through <strong>May 31, 2026</strong>.
+          through <strong>{SALE_END_LONG}</strong>.
         </p>
 
         <div className="rounded-lg border border-line bg-white overflow-hidden">
