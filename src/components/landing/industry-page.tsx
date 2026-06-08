@@ -66,10 +66,7 @@ function Templates({
             </h2>
             <p className="mt-2 text-stone max-w-2xl">
               Pick a design, upload your list, we mail it. Postage included on every template.
-              {" "}
-              <Link href={`/templates?industry=${industry.slug}`} className="text-brand-700 underline hover:text-brand-800">
-                View all {industry.nav.toLowerCase()} templates →
-              </Link>
+              New designs added regularly.
             </p>
           </div>
         </div>
