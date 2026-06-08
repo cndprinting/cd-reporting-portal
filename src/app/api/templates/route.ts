@@ -33,13 +33,24 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     name,
+    shortCode,
     category,
     size,
+    industry,
+    subcategory,
+    description,
+    offerHook,
     thumbnailUrl,
+    frontImageUrl,
+    backImageUrl,
     htmlTemplate,
+    backHtmlTemplate,
     variables,
     pricePerPiece,
+    postageIncluded,
     minQuantity,
+    featured,
+    displayOrder,
   } = body;
   if (!name || !htmlTemplate)
     return NextResponse.json({ error: "name and htmlTemplate required" }, { status: 400 });
@@ -47,13 +58,24 @@ export async function POST(req: NextRequest) {
   const tpl = await prisma.mailerTemplate.create({
     data: {
       name,
+      shortCode: shortCode || null,
       category: category ?? "postcard",
       size: size ?? "6x9",
-      thumbnailUrl,
+      industry: industry || null,
+      subcategory: subcategory || null,
+      description: description || null,
+      offerHook: offerHook || null,
+      thumbnailUrl: thumbnailUrl || null,
+      frontImageUrl: frontImageUrl || null,
+      backImageUrl: backImageUrl || null,
       htmlTemplate,
+      backHtmlTemplate: backHtmlTemplate || null,
       variables: variables ?? "firstName,address1,city,state,zip5,offer",
       pricePerPiece: pricePerPiece ?? 0.85,
+      postageIncluded: postageIncluded ?? true,
       minQuantity: minQuantity ?? 500,
+      featured: featured ?? false,
+      displayOrder: displayOrder ?? 0,
     },
   });
   return NextResponse.json(tpl, { status: 201 });

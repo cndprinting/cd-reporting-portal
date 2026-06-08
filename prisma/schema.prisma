@@ -638,26 +638,53 @@ model PackageDrawdown {
 // template to render a live preview the customer approves on the spot.
 model MailerTemplate {
   id            String   @id @default(cuid())
-  name          String   // "Beach Real Estate 6x9"
+  name          String   // "Cash for Vacant Land 6x9"
+  // SKU-style identifier, e.g. "LND-PC-001" (Land · Postcard · 001).
+  // Used in admin UIs and order references; null on legacy rows.
+  shortCode     String?  @unique
   category      String   @default("postcard") // postcard, letter, flat
   size          String   @default("6x9")      // 4x6, 6x9, 6x11, etc.
-  thumbnailUrl  String?                       // preview image (Vercel Blob)
+  // Industry / persona this template targets — matches keys in
+  // src/lib/industries.ts (land-investor, real-estate, nonprofit, etc.).
+  // Drives filtering on the public template gallery.
+  industry      String?
+  // Optional finer-grained angle within an industry — "motivated-seller",
+  // "yellow-letter", "probate", "aerial-view", etc. Used for sub-grouping.
+  subcategory   String?
+  // Short marketing description for the gallery card.
+  description   String?  @db.Text
+  // One-line offer hook surfaced on the gallery card ("Cash for vacant land").
+  offerHook     String?
+  // Front/back design preview images (Vercel Blob).
+  thumbnailUrl  String?  // legacy — prefer frontImageUrl
+  frontImageUrl String?
+  backImageUrl  String?
   // Template content — HTML with {{variableName}} placeholders.
   // Required variables documented in `variables` string[] below.
-  htmlTemplate  String   @db.Text
+  htmlTemplate     String   @db.Text
+  backHtmlTemplate String?  @db.Text
   // Required variable names the user's spreadsheet must provide
   // (comma-separated, e.g. "firstName,address1,city,state,zip5,offer")
   variables     String
-  // Default price per piece (can be overridden per-order)
+  // Default price per piece (can be overridden per-order).
   pricePerPiece Float    @default(0.85)
+  // Whether the price already includes USPS postage (drives "postage included"
+  // badge on the gallery card — Rocket Prints / PCM use this aggressively).
+  postageIncluded Boolean @default(true)
   // Recommended / minimum quantity
   minQuantity   Int      @default(500)
+  // Surfaced in a "Featured templates" section on the public gallery.
+  featured      Boolean  @default(false)
+  // Manual ordering knob for the gallery; lower = earlier.
+  displayOrder  Int      @default(0)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([category])
   @@index([isActive])
+  @@index([industry])
+  @@index([featured])
 }
 
 // -------- Production handoff log — admin manually sends an order to one or
