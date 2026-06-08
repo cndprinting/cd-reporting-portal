@@ -11,11 +11,9 @@
  */
 
 import Link from "next/link";
-import { Suspense } from "react";
 import prisma from "@/lib/prisma";
 import { INDUSTRIES } from "@/lib/industries";
-import { SamplesButton } from "@/components/templates/samples-button";
-import { TemplatePreview } from "@/components/templates/template-preview";
+import { TemplateCard } from "@/components/templates/template-card";
 
 export const revalidate = 60; // refresh from DB at most once a minute
 
@@ -114,66 +112,7 @@ export default async function TemplatesGalleryPage({ searchParams }: PageProps) 
         ) : (
           <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {templates.map((t) => (
-              <article
-                key={t.id}
-                className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white shadow-sm hover:shadow-md transition-shadow"
-              >
-                <Suspense fallback={<div className="h-56 bg-paper-soft" />}>
-                  <TemplatePreview
-                    frontImageUrl={t.frontImageUrl ?? t.thumbnailUrl}
-                    html={t.htmlTemplate}
-                    aspect={t.category === "letter" ? "letter" : "postcard"}
-                  />
-                </Suspense>
-
-                <div className="flex-1 p-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-display text-lg text-ink leading-tight">{t.name}</h3>
-                      {t.shortCode && (
-                        <div className="mt-1 text-[10px] font-mono uppercase tracking-wider text-stone">{t.shortCode}</div>
-                      )}
-                    </div>
-                    {t.featured && (
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
-                        FEATURED
-                      </span>
-                    )}
-                  </div>
-                  {t.offerHook && (
-                    <div className="mt-1 text-sm font-medium text-brand-700">{t.offerHook}</div>
-                  )}
-                  {t.description && (
-                    <p className="mt-2 text-sm text-stone line-clamp-3">{t.description}</p>
-                  )}
-
-                  <div className="mt-4 flex items-center gap-2 text-sm">
-                    <span className="text-2xl font-display text-ink">
-                      ${t.pricePerPiece.toFixed(2)}
-                    </span>
-                    <span className="text-stone">/piece</span>
-                    {t.postageIncluded && (
-                      <span className="ml-auto rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        POSTAGE INCLUDED
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 text-xs text-stone">
-                    {t.category === "letter" ? "Letter · " : "Postcard · "}
-                    {t.size} · Min {t.minQuantity.toLocaleString()} pieces
-                  </div>
-                </div>
-
-                <div className="border-t border-line bg-paper-soft p-3 flex gap-2">
-                  <Link
-                    href={`/signup?template=${t.id}`}
-                    className="flex-1 rounded bg-brand-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-brand-700"
-                  >
-                    Customize &amp; order
-                  </Link>
-                  <SamplesButton templateName={t.name} templateShortCode={t.shortCode ?? undefined} />
-                </div>
-              </article>
+              <TemplateCard key={t.id} t={t} />
             ))}
           </div>
         )}

@@ -9,6 +9,11 @@ import { notFound } from "next/navigation";
 import { getIndustry, INDUSTRIES, type Industry } from "@/lib/industries";
 import { ALL_TIERS, POSTAGE_PER_UNIT, EFFECTIVE_DATE } from "@/lib/services/rate-card";
 import { IndustryPage } from "@/components/landing/industry-page";
+import prisma from "@/lib/prisma";
+import type { TemplateCardData } from "@/components/templates/template-card";
+
+// Revalidate so admin template adds show up without a full redeploy.
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   return INDUSTRIES.map((i) => ({ slug: i.slug }));
@@ -43,10 +48,37 @@ export default async function IndustryDetailPage({
       ? ["4.25x6", "6x8.5", "6x11"]
       : ["1-Sheet", "2-Sheet"];
 
+  // Fetch templates tagged to this industry so they appear inline on the
+  // persona landing page (alongside hero / pricing / form). Same data and
+  // styling as /templates — just filtered.
+  const templates: TemplateCardData[] = prisma
+    ? await prisma.mailerTemplate.findMany({
+        where: { isActive: true, industry: ind.slug },
+        orderBy: [{ featured: "desc" }, { displayOrder: "asc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          name: true,
+          shortCode: true,
+          category: true,
+          size: true,
+          thumbnailUrl: true,
+          frontImageUrl: true,
+          htmlTemplate: true,
+          description: true,
+          offerHook: true,
+          pricePerPiece: true,
+          postageIncluded: true,
+          minQuantity: true,
+          featured: true,
+        },
+      })
+    : [];
+
   return (
     <IndustryPage
       industry={ind}
       pricing={{ tiers, sizes, postage: POSTAGE_PER_UNIT, effective: EFFECTIVE_DATE }}
+      templates={templates}
     />
   );
 }

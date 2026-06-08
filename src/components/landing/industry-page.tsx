@@ -6,6 +6,7 @@ import type { Industry } from "@/lib/industries";
 import { IndustriesDropdown } from "./industries-dropdown";
 import { trackLead } from "@/lib/analytics";
 import { MobileCtaBar } from "./mobile-cta-bar";
+import { TemplateCard, type TemplateCardData } from "@/components/templates/template-card";
 
 interface TierRow {
   minQty: number;
@@ -22,9 +23,11 @@ interface PricingProps {
 export function IndustryPage({
   industry,
   pricing,
+  templates = [],
 }: {
   industry: Industry;
   pricing: PricingProps;
+  templates?: TemplateCardData[];
 }) {
   return (
     <div className="min-h-screen bg-paper text-ink font-sans">
@@ -33,11 +36,50 @@ export function IndustryPage({
       <Pain industry={industry} />
       <WhyBuiltFor industry={industry} />
       <UseCases industry={industry} />
+      <Templates industry={industry} templates={templates} />
       <RateCardPreview pricing={pricing} industry={industry} />
       <GetStarted industry={industry} />
       <PublicFooter />
       <MobileCtaBar />
     </div>
+  );
+}
+
+function Templates({
+  industry,
+  templates,
+}: {
+  industry: Industry;
+  templates: TemplateCardData[];
+}) {
+  if (templates.length === 0) return null;
+  return (
+    <section className="border-b border-line bg-paper-soft">
+      <div className="max-w-6xl mx-auto px-6 py-16">
+        <div className="flex items-end justify-between gap-4 mb-2 flex-wrap">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone mb-1">
+              Templates · {industry.nav}
+            </div>
+            <h2 className="text-3xl font-display text-ink">
+              Pre-built mailers, ready to send.
+            </h2>
+            <p className="mt-2 text-stone max-w-2xl">
+              Pick a design, upload your list, we mail it. Postage included on every template.
+              {" "}
+              <Link href={`/templates?industry=${industry.slug}`} className="text-brand-700 underline hover:text-brand-800">
+                View all {industry.nav.toLowerCase()} templates →
+              </Link>
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {templates.slice(0, 6).map((t) => (
+            <TemplateCard key={t.id} t={t} />
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
