@@ -57,16 +57,7 @@ export function TemplateCard({ t }: { t: TemplateCardData }) {
         {t.description && (
           <p className="mt-2 text-sm text-stone line-clamp-3">{t.description}</p>
         )}
-        <div className="mt-4 flex items-center gap-2 text-sm">
-          <span className="text-2xl font-display text-ink">${t.pricePerPiece.toFixed(2)}</span>
-          <span className="text-stone">/piece</span>
-          {t.postageIncluded && (
-            <span className="ml-auto rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-              POSTAGE INCLUDED
-            </span>
-          )}
-        </div>
-        <div className="mt-1 text-xs text-stone">
+        <div className="mt-4 text-xs text-stone">
           {t.category === "letter" ? "Letter · " : "Postcard · "}
           {t.size} · Min {t.minQuantity.toLocaleString()} pieces
         </div>
