@@ -30,8 +30,10 @@ const SAMPLE: Record<string, string> = {
   offerLow: "8,500",
   offerHigh: "12,000",
   offer: "$50 off your first service",
-  senderName: "BH Land Group",
-  senderPhone: "(727) 572-9999",
+  // Generic placeholder — never reference a real customer in the public
+  // template gallery preview.
+  senderName: "Sample Buyer",
+  senderPhone: "(555) 555-0100",
   companyName: "C&D Printing",
 };
 
