@@ -97,6 +97,11 @@ model User {
   companyId      String?
   company        Company? @relation(fields: [companyId], references: [id])
   managedCompanies CompanyManager[]
+  // Email verification — set on signup, cleared/stamped when user clicks the link.
+  // null emailVerifiedAt = unverified (login blocked).
+  emailVerifyToken      String?   @unique
+  emailVerifyTokenExpiresAt DateTime?
+  emailVerifiedAt       DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

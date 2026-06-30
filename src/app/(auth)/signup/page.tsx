@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { User, Building2, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [turnstileToken, setTurnstileToken] = React.useState("");
+  const turnstileRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   const update = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -39,6 +42,11 @@ export default function SignUpPage() {
       return;
     }
 
+    if (turnstileRequired && !turnstileToken) {
+      setError("Please complete the CAPTCHA challenge.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth", {
@@ -50,6 +58,7 @@ export default function SignUpPage() {
           password: form.password,
           name: form.name,
           companyName: form.company || undefined,
+          turnstileToken,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -58,6 +67,13 @@ export default function SignUpPage() {
         setLoading(false);
         return;
       }
+      // New flow: backend doesn't create a session — user must click the
+      // verification link first. Redirect to the "check your email" page.
+      if (data?.requiresVerification) {
+        router.push(`/check-email?email=${encodeURIComponent(form.email)}`);
+        return;
+      }
+      // Demo-mode fallback (no DB) still returns a user/session immediately.
       router.push("/dashboard/overview");
     } catch {
       setError("Network error. Please try again.");
@@ -169,6 +185,8 @@ export default function SignUpPage() {
               />
             </div>
           </div>
+
+          <TurnstileWidget onToken={setTurnstileToken} />
 
           <Button type="submit" className="w-full h-11" disabled={loading}>
             {loading ? (

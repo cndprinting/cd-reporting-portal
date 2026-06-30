@@ -37,6 +37,13 @@ function LoginPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Unverified email → bounce them to the "check your email" screen
+        // where they can resend the link instead of being stuck on a generic
+        // error.
+        if (data?.needsVerification && data?.email) {
+          router.push(`/check-email?email=${encodeURIComponent(data.email)}`);
+          return;
+        }
         setError(data.error || "Invalid email or password");
         setLoading(false);
         return;
