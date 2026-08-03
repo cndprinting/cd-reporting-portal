@@ -1,6 +1,11 @@
 /**
  * Daily tracking health check.
  *
+ * PAUSED 2026-08-03 per Benjy — cron entry removed from vercel.json until
+ * MailerCity lead volume warrants daily monitoring again. Endpoint still
+ * works if hit manually; re-arm by adding back to vercel.json:
+ *   { "path": "/api/cron/health-check", "schedule": "0 13 * * *" }
+ *
  * Cron-triggered (Vercel cron, see vercel.json). Runs every morning, surveys
  * the IV-MTR pipeline + active orders, and emails admins a one-line summary.
  *

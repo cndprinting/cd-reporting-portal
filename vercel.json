@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/sharepoint-poll",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/health-check",
-      "schedule": "0 13 * * *"
     }
   ]
 }
